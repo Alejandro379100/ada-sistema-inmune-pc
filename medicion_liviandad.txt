@@ -1,0 +1,17 @@
+==================================================
+REPORTE DE LIVIANDAD DE ADA
+Fecha: 2026-07-18 16:13
+Duración real: 600s (120 muestras)
+--------------------------------------------------
+RAM  promedio: 2.1 MB
+RAM  mínima:   2.0 MB
+RAM  máxima:   2.1 MB
+CPU  promedio: 0.0%
+CPU  máximo:   0.0%
+==================================================
+
+Para referencia (RAM en reposo, procesos típicos de Windows):
+  - Chrome (1 pestaña):      ~150-300 MB
+  - VS Code:                 ~200-400 MB
+  - Spotify:                 ~150-250 MB
+  - Un servicio de fondo liviano: <50 MB

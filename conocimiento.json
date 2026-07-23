@@ -1,0 +1,61 @@
+{
+  "hardware_pc": {
+    "valor": {
+      "ram_total_gb": 15.8,
+      "ram_libre_gb": 8.1,
+      "disco_total_gb": 237.4,
+      "disco_libre_gb": 133.7,
+      "cpu_nucleos": 8,
+      "cpu_frecuencia_mhz": 1696,
+      "sistema_operativo": "Windows 11",
+      "arquitectura": "AMD64",
+      "procesos_activos": [
+        "python.exe",
+        "StartMenuExperienceHost.exe",
+        "MemCompression",
+        "Code.exe",
+        "CrossDeviceService.exe",
+        "dwm.exe",
+        "MsMpEng.exe",
+        "chrome.exe",
+        "Notepad.exe",
+        "explorer.exe",
+        "msedge.exe",
+        "chrome.exe",
+        "chrome.exe",
+        "Code.exe",
+        "chrome.exe",
+        "powershell.exe",
+        "chrome.exe",
+        "SnippingTool.exe",
+        "Code.exe",
+        "Code.exe"
+      ]
+    },
+    "fecha": "2026-06-23"
+  },
+  "consejo_inicial_groq": {
+    "valor": "Para mantener tu PC rápido y sano, es fundamental priorizar el uso eficiente de la memoria RAM y el espacio en disco. Sin embargo, el consejo más importante es **monitorear y limitar el consumo de RAM**, ya que con 8.1 GB de RAM libre, es crucial evitar que se agote con aplicaciones que la consuman en exceso, lo que podría ralentizar significativamente el rendimiento de tu sistema.",
+    "fecha": "2026-06-23"
+  },
+  "estado_arranque": {
+    "valor": {
+      "ram_total_gb": 15.8,
+      "ram_libre_gb": 8.1,
+      "ram_usada_pct": 48.6,
+      "disco_libre_gb": 135.0,
+      "cpu_uso_pct": 10.9,
+      "bateria_pct": 79,
+      "cargando": true
+    },
+    "fecha": "2026-06-23 21:03"
+  },
+  "consejo_arranque": {
+    "valor": "Debemos optimizar el uso de la RAM, ya que la GPU integrada comparte recursos de RAM y es crucial mantener al menos 6GB libres para que VS Code funcione sin problemas. Analicemos los procesos en ejecución para identificar posibles consumidores de RAM y optimizar su uso.",
+    "fecha": "2026-06-23 21:03"
+  },
+  "tip_arranque": {
+    "valor": "Para optimizar, cierra cualquier aplicación innecesaria que esté utilizando recursos de RAM y CPU, como navegadores, aplicaciones de correo electrónico o programas de escritorio. Esto liberará más rec",
+    "fecha": "2026-07-21"
+  }
+}

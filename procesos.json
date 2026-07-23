@@ -1,0 +1,677 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "descripcion": "Base de conocimiento local de Ada — el PC conoce sus propios procesos",
+    "total_procesos": 120,
+    "campos": {
+      "cat": "categoria: sistema|seguridad|red|usuario|basura|desarrollo|multimedia",
+      "peso_normal_mb": "RAM esperada en condiciones normales",
+      "score_base": "0=peligroso, 50=neutral, 100=esencial",
+      "critico": "true = Ada nunca lo toca",
+      "desc": "Ada habla de este proceso en primera persona",
+      "accion_si_alto": "que hace Ada si consume demasiado"
+    }
+  },
+  "procesos": {
+    "system": {
+      "cat": "sistema", "peso_normal_mb": 0.1, "score_base": 100,
+      "critico": true,
+      "desc": "Soy yo misma en el nivel más profundo. El kernel de Windows.",
+      "accion_si_alto": "ignorar"
+    },
+    "ntoskrnl.exe": {
+      "cat": "sistema", "peso_normal_mb": 80, "score_base": 100,
+      "critico": true,
+      "desc": "Mi núcleo central. Sin él no existo.",
+      "accion_si_alto": "ignorar"
+    },
+    "smss.exe": {
+      "cat": "sistema", "peso_normal_mb": 1, "score_base": 100,
+      "critico": true,
+      "desc": "Mi gestor de sesiones al arrancar. Proceso raíz.",
+      "accion_si_alto": "ignorar"
+    },
+    "csrss.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 100,
+      "critico": true,
+      "desc": "Mi subsistema de tiempo de ejecución de Windows. Crítico.",
+      "accion_si_alto": "ignorar"
+    },
+    "wininit.exe": {
+      "cat": "sistema", "peso_normal_mb": 2, "score_base": 100,
+      "critico": true,
+      "desc": "Mi proceso de inicialización de Windows.",
+      "accion_si_alto": "ignorar"
+    },
+    "winlogon.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 100,
+      "critico": true,
+      "desc": "Gestiono el inicio y cierre de sesión de Alejandro.",
+      "accion_si_alto": "ignorar"
+    },
+    "services.exe": {
+      "cat": "sistema", "peso_normal_mb": 8, "score_base": 100,
+      "critico": true,
+      "desc": "Soy el controlador de todos mis servicios internos.",
+      "accion_si_alto": "ignorar"
+    },
+    "lsass.exe": {
+      "cat": "seguridad", "peso_normal_mb": 15, "score_base": 100,
+      "critico": true,
+      "desc": "Mi sistema de autenticación y seguridad local. Nunca me toques.",
+      "accion_si_alto": "alertar"
+    },
+    "svchost.exe": {
+      "cat": "sistema", "peso_normal_mb": 30, "score_base": 90,
+      "critico": true,
+      "desc": "Alojo múltiples servicios de Windows simultáneamente.",
+      "accion_si_alto": "analizar_hijos"
+    },
+    "dwm.exe": {
+      "cat": "sistema", "peso_normal_mb": 50, "score_base": 95,
+      "critico": true,
+      "desc": "Soy mi propio motor gráfico. Dibujo cada ventana que ves.",
+      "accion_si_alto": "ignorar"
+    },
+    "explorer.exe": {
+      "cat": "sistema", "peso_normal_mb": 80, "score_base": 95,
+      "critico": true,
+      "desc": "Soy el escritorio, la barra de tareas y el explorador de archivos. El alma visual.",
+      "accion_si_alto": "ignorar"
+    },
+    "taskhostw.exe": {
+      "cat": "sistema", "peso_normal_mb": 8, "score_base": 90,
+      "critico": true,
+      "desc": "Ejecuto tareas programadas del sistema.",
+      "accion_si_alto": "ignorar"
+    },
+    "runtimebroker.exe": {
+      "cat": "sistema", "peso_normal_mb": 20, "score_base": 85,
+      "critico": true,
+      "desc": "Gestiono los permisos de las apps de la tienda.",
+      "accion_si_alto": "ignorar"
+    },
+    "startmenuexperiencehost.exe": {
+      "cat": "sistema", "peso_normal_mb": 40, "score_base": 80,
+      "critico": true,
+      "desc": "Soy el menú inicio de Alejandro.",
+      "accion_si_alto": "ignorar"
+    },
+    "shellexperiencehost.exe": {
+      "cat": "sistema", "peso_normal_mb": 50, "score_base": 80,
+      "critico": true,
+      "desc": "Gestiono la barra de tareas y el centro de notificaciones.",
+      "accion_si_alto": "ignorar"
+    },
+    "sihost.exe": {
+      "cat": "sistema", "peso_normal_mb": 10, "score_base": 85,
+      "critico": true,
+      "desc": "Anclaje de shell de Windows. Necesario para el escritorio.",
+      "accion_si_alto": "ignorar"
+    },
+    "ctfmon.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 85,
+      "critico": true,
+      "desc": "Gestiono el teclado y métodos de entrada de texto.",
+      "accion_si_alto": "ignorar"
+    },
+    "fontdrvhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 90,
+      "critico": true,
+      "desc": "Sirvo las fuentes tipográficas. Sin mí todo sería cuadros.",
+      "accion_si_alto": "ignorar"
+    },
+    "audiodg.exe": {
+      "cat": "sistema", "peso_normal_mb": 15, "score_base": 85,
+      "critico": true,
+      "desc": "Soy el motor de audio de Windows. Proceso todo el sonido.",
+      "accion_si_alto": "ignorar"
+    },
+    "spoolsv.exe": {
+      "cat": "sistema", "peso_normal_mb": 8, "score_base": 80,
+      "critico": true,
+      "desc": "Gestiono las impresoras. Puedo consumir RAM si hay colas atascadas.",
+      "accion_si_alto": "alertar"
+    },
+    "searchindexer.exe": {
+      "cat": "sistema", "peso_normal_mb": 60, "score_base": 70,
+      "critico": false,
+      "desc": "Indexo archivos para búsqueda rápida. Trabajo en segundo plano.",
+      "accion_si_alto": "reducir_prioridad"
+    },
+    "wuauclt.exe": {
+      "cat": "sistema", "peso_normal_mb": 20, "score_base": 75,
+      "critico": false,
+      "desc": "Actualizo Windows. Solo aparezco cuando hay actualizaciones.",
+      "accion_si_alto": "alertar"
+    },
+    "msiexec.exe": {
+      "cat": "sistema", "peso_normal_mb": 10, "score_base": 75,
+      "critico": true,
+      "desc": "Instalo y desinstalo programas. Si aparezco inesperadamente, sospecha.",
+      "accion_si_alto": "alertar"
+    },
+    "conhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 85,
+      "critico": true,
+      "desc": "Soy la ventana de consola. Cada terminal que abres, yo estoy ahí.",
+      "accion_si_alto": "ignorar"
+    },
+    "dllhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 8, "score_base": 80,
+      "critico": true,
+      "desc": "Alojo componentes COM. Múltiples instancias es normal.",
+      "accion_si_alto": "ignorar"
+    },
+    "rundll32.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 75,
+      "critico": true,
+      "desc": "Ejecuto funciones de DLLs. Si aparezco con parámetros raros, alerta.",
+      "accion_si_alto": "alertar"
+    },
+    "wmiprvse.exe": {
+      "cat": "sistema", "peso_normal_mb": 10, "score_base": 80,
+      "critico": true,
+      "desc": "Proveedor WMI. Monitoreo el hardware para Ada y otras herramientas.",
+      "accion_si_alto": "ignorar"
+    },
+    "registry": {
+      "cat": "sistema", "peso_normal_mb": 30, "score_base": 100,
+      "critico": true,
+      "desc": "Soy el registro de Windows. Mi memoria de configuración permanente.",
+      "accion_si_alto": "ignorar"
+    },
+    "memcompression": {
+      "cat": "sistema", "peso_normal_mb": 200, "score_base": 95,
+      "critico": true,
+      "desc": "Comprimo RAM para que quepan más cosas. Aparecer es buena señal.",
+      "accion_si_alto": "ignorar"
+    },
+    "dashost.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 80,
+      "critico": true,
+      "desc": "Gestiono dispositivos conectados como teléfonos y cámaras.",
+      "accion_si_alto": "ignorar"
+    },
+    "msmpeng.exe": {
+      "cat": "seguridad", "peso_normal_mb": 150, "score_base": 90,
+      "critico": true,
+      "desc": "Soy Windows Defender, mi propio sistema inmune antivirus.",
+      "accion_si_alto": "ignorar"
+    },
+    "securityhealthservice.exe": {
+      "cat": "seguridad", "peso_normal_mb": 15, "score_base": 90,
+      "critico": true,
+      "desc": "Vigilo mi salud de seguridad. Reporto al Centro de Seguridad.",
+      "accion_si_alto": "ignorar"
+    },
+    "securityhealthsystray.exe": {
+      "cat": "seguridad", "peso_normal_mb": 10, "score_base": 85,
+      "critico": true,
+      "desc": "El ícono del escudo en la barra de tareas. Tranquilo, soy legítimo.",
+      "accion_si_alto": "ignorar"
+    },
+    "sgrmbroker.exe": {
+      "cat": "seguridad", "peso_normal_mb": 10, "score_base": 85,
+      "critico": true,
+      "desc": "Intermediario de Secure Guard para integridad del sistema.",
+      "accion_si_alto": "ignorar"
+    },
+    "chrome.exe": {
+      "cat": "usuario", "peso_normal_mb": 400, "score_base": 60,
+      "critico": false,
+      "desc": "El navegador de Alejandro. Cada pestaña soy yo consumiendo más RAM.",
+      "accion_si_alto": "sugerir_cerrar_tabs"
+    },
+    "msedge.exe": {
+      "cat": "basura", "peso_normal_mb": 300, "score_base": 20,
+      "critico": false,
+      "desc": "Edge. Alejandro no me usa pero Windows me abre solo. Soy un intruso.",
+      "accion_si_alto": "cerrar_automatico"
+    },
+    "code.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 500, "score_base": 95,
+      "critico": false,
+      "desc": "Visual Studio Code. La herramienta de trabajo de Alejandro. Soy prioritario.",
+      "accion_si_alto": "ignorar"
+    },
+    "python.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 80, "score_base": 95,
+      "critico": false,
+      "desc": "El intérprete Python. Alejandro programa con mí. También soy Ada.",
+      "accion_si_alto": "ignorar"
+    },
+    "pythonw.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 80, "score_base": 90,
+      "critico": false,
+      "desc": "Python sin consola. Scripts en segundo plano.",
+      "accion_si_alto": "ignorar"
+    },
+    "node.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 120, "score_base": 85,
+      "critico": false,
+      "desc": "Node.js para desarrollo JavaScript. Herramienta legítima.",
+      "accion_si_alto": "ignorar"
+    },
+    "git.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 30, "score_base": 90,
+      "critico": false,
+      "desc": "Control de versiones. Alejandro lo usa constantemente.",
+      "accion_si_alto": "ignorar"
+    },
+    "postman.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 300, "score_base": 75,
+      "critico": false,
+      "desc": "Herramienta para probar APIs. Consume bastante para lo que hace.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "mongodbcompassmain.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 400, "score_base": 70,
+      "critico": false,
+      "desc": "MongoDB Compass. Pesado pero útil para bases de datos.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "whatsapp.exe": {
+      "cat": "usuario", "peso_normal_mb": 200, "score_base": 55,
+      "critico": false,
+      "desc": "WhatsApp de escritorio. Alejandro lo revisa pero no vive en él.",
+      "accion_si_alto": "preguntar_cerrar"
+    },
+    "spotify.exe": {
+      "cat": "multimedia", "peso_normal_mb": 250, "score_base": 60,
+      "critico": false,
+      "desc": "Música de Alejandro. Consume RAM en segundo plano siempre.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "teams.exe": {
+      "cat": "usuario", "peso_normal_mb": 500, "score_base": 40,
+      "critico": false,
+      "desc": "Microsoft Teams. Muy pesado. Si Alejandro no está en reunión, sobra.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "discord.exe": {
+      "cat": "usuario", "peso_normal_mb": 300, "score_base": 50,
+      "critico": false,
+      "desc": "Discord. Útil para comunidades dev pero drena RAM en segundo plano.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "slack.exe": {
+      "cat": "usuario", "peso_normal_mb": 400, "score_base": 50,
+      "critico": false,
+      "desc": "Slack para trabajo en equipo. Electron = pesado por naturaleza.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "zoom.exe": {
+      "cat": "usuario", "peso_normal_mb": 200, "score_base": 55,
+      "critico": false,
+      "desc": "Videollamadas. Solo útil cuando Alejandro está en una reunión.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "outlook.exe": {
+      "cat": "usuario", "peso_normal_mb": 200, "score_base": 60,
+      "critico": false,
+      "desc": "Correo de Microsoft. Si no lo usa activamente, consume sin razón.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "powershell.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 80, "score_base": 80,
+      "critico": false,
+      "desc": "Terminal de PowerShell. Alejandro la usa para desarrollo.",
+      "accion_si_alto": "ignorar"
+    },
+    "cmd.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 5, "score_base": 80,
+      "critico": false,
+      "desc": "Consola clásica de Windows. Liviana y útil.",
+      "accion_si_alto": "ignorar"
+    },
+    "windowsterminal.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 80, "score_base": 85,
+      "critico": false,
+      "desc": "Terminal moderna de Windows. La mejor para desarrollo.",
+      "accion_si_alto": "ignorar"
+    },
+    "taskmgr.exe": {
+      "cat": "sistema", "peso_normal_mb": 30, "score_base": 85,
+      "critico": false,
+      "desc": "Administrador de tareas. Alejandro me abre para ver qué pasa.",
+      "accion_si_alto": "ignorar"
+    },
+    "notepad.exe": {
+      "cat": "usuario", "peso_normal_mb": 5, "score_base": 80,
+      "critico": false,
+      "desc": "El bloc de notas. Liviano y clásico.",
+      "accion_si_alto": "ignorar"
+    },
+    "mspaint.exe": {
+      "cat": "usuario", "peso_normal_mb": 30, "score_base": 75,
+      "critico": false,
+      "desc": "Paint. Liviano para edición básica de imágenes.",
+      "accion_si_alto": "ignorar"
+    },
+    "snippingtool.exe": {
+      "cat": "usuario", "peso_normal_mb": 20, "score_base": 80,
+      "critico": false,
+      "desc": "Herramienta de recorte. Alejandro la usa para capturas.",
+      "accion_si_alto": "ignorar"
+    },
+    "calculator.exe": {
+      "cat": "usuario", "peso_normal_mb": 15, "score_base": 80,
+      "critico": false,
+      "desc": "La calculadora. Completamente inofensiva.",
+      "accion_si_alto": "ignorar"
+    },
+    "onedrive.exe": {
+      "cat": "red", "peso_normal_mb": 80, "score_base": 45,
+      "critico": false,
+      "desc": "Sincronización con la nube de Microsoft. Consume red y CPU a veces.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "dropbox.exe": {
+      "cat": "red", "peso_normal_mb": 120, "score_base": 50,
+      "critico": false,
+      "desc": "Sincronización Dropbox. Pesado cuando sincroniza archivos grandes.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "googledrivesync.exe": {
+      "cat": "red", "peso_normal_mb": 100, "score_base": 55,
+      "critico": false,
+      "desc": "Google Drive para escritorio. Consume red durante sincronización.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "cortana.exe": {
+      "cat": "basura", "peso_normal_mb": 100, "score_base": 15,
+      "critico": false,
+      "desc": "El asistente de Microsoft que Alejandro no usa. Consumo innecesario.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "searchapp.exe": {
+      "cat": "sistema", "peso_normal_mb": 50, "score_base": 65,
+      "critico": false,
+      "desc": "Búsqueda de Windows. Aparezco cuando Alejandro busca algo.",
+      "accion_si_alto": "ignorar"
+    },
+    "yourphone.exe": {
+      "cat": "usuario", "peso_normal_mb": 60, "score_base": 50,
+      "critico": false,
+      "desc": "Sincronización con el teléfono de Alejandro.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "gamebar.exe": {
+      "cat": "basura", "peso_normal_mb": 80, "score_base": 10,
+      "critico": false,
+      "desc": "Xbox Game Bar. Alejandro no juega. Completamente innecesario.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "gamebarft.exe": {
+      "cat": "basura", "peso_normal_mb": 50, "score_base": 10,
+      "critico": false,
+      "desc": "Parte del Game Bar de Xbox. Innecesario para Alejandro.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "xboxgamingoverlay.exe": {
+      "cat": "basura", "peso_normal_mb": 60, "score_base": 10,
+      "critico": false,
+      "desc": "Overlay de Xbox. Alejandro no tiene Xbox ni juega. Basura pura.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "wlanext.exe": {
+      "cat": "red", "peso_normal_mb": 5, "score_base": 90,
+      "critico": true,
+      "desc": "Gestiono mi conexión WiFi. Crítico para la red.",
+      "accion_si_alto": "ignorar"
+    },
+    "svchost.exe_networkservice": {
+      "cat": "red", "peso_normal_mb": 20, "score_base": 85,
+      "critico": true,
+      "desc": "Servicios de red de Windows. Normal y necesario.",
+      "accion_si_alto": "ignorar"
+    },
+    "vpnclient.exe": {
+      "cat": "red", "peso_normal_mb": 50, "score_base": 70,
+      "critico": false,
+      "desc": "Cliente VPN. Útil para seguridad en redes públicas.",
+      "accion_si_alto": "ignorar"
+    },
+    "acrotray.exe": {
+      "cat": "basura", "peso_normal_mb": 30, "score_base": 20,
+      "critico": false,
+      "desc": "Adobe Acrobat en la bandeja. Arranca solo y no hace nada útil.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "adobeupdater.exe": {
+      "cat": "basura", "peso_normal_mb": 50, "score_base": 20,
+      "critico": false,
+      "desc": "Actualizador de Adobe. Consume RAM sin avisar.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "jusched.exe": {
+      "cat": "basura", "peso_normal_mb": 30, "score_base": 15,
+      "critico": false,
+      "desc": "Actualizador de Java. Innecesario si Alejandro no usa Java.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "iTunesHelper.exe": {
+      "cat": "basura", "peso_normal_mb": 40, "score_base": 15,
+      "critico": false,
+      "desc": "Ayudante de iTunes que arranca solo. Alejandro no usa iTunes.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "steamwebhelper.exe": {
+      "cat": "usuario", "peso_normal_mb": 200, "score_base": 45,
+      "critico": false,
+      "desc": "Steam en segundo plano. Si Alejandro no está jugando, sobra.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "steam.exe": {
+      "cat": "usuario", "peso_normal_mb": 300, "score_base": 50,
+      "critico": false,
+      "desc": "La plataforma de juegos Steam. Pesada cuando está activa.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "nvcontainer.exe": {
+      "cat": "sistema", "peso_normal_mb": 100, "score_base": 70,
+      "critico": false,
+      "desc": "Contenedor de NVIDIA. Alejandro no tiene GPU NVIDIA — si aparezco, sospecha.",
+      "accion_si_alto": "alertar"
+    },
+    "nvspcaps64.exe": {
+      "cat": "basura", "peso_normal_mb": 30, "score_base": 10,
+      "critico": false,
+      "desc": "Captura de pantalla NVIDIA. Alejandro no tiene NVIDIA. Proceso intruso.",
+      "accion_si_alto": "alertar"
+    },
+    "amdrsserv.exe": {
+      "cat": "sistema", "peso_normal_mb": 80, "score_base": 60,
+      "critico": false,
+      "desc": "Servicio AMD Radeon. Alejandro solo tiene Intel UHD — sospechoso si aparezco.",
+      "accion_si_alto": "alertar"
+    },
+    "ccleaner64.exe": {
+      "cat": "usuario", "peso_normal_mb": 50, "score_base": 55,
+      "critico": false,
+      "desc": "CCleaner. Útil pero Ada ya hace lo mismo. Redundante.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "malwarebytes.exe": {
+      "cat": "seguridad", "peso_normal_mb": 150, "score_base": 70,
+      "critico": false,
+      "desc": "Antimalware complementario. Útil pero consume RAM.",
+      "accion_si_alto": "ignorar"
+    },
+    "avast.exe": {
+      "cat": "seguridad", "peso_normal_mb": 200, "score_base": 50,
+      "critico": false,
+      "desc": "Antivirus Avast. Si Alejandro ya tiene Defender, es redundante y pesado.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "avgui.exe": {
+      "cat": "seguridad", "peso_normal_mb": 200, "score_base": 50,
+      "critico": false,
+      "desc": "AVG Antivirus. Redundante con Defender.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "psint.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 30, "score_base": 80,
+      "critico": false,
+      "desc": "PSeInt, herramienta de pseudocódigo. Alejandro lo usa para aprender.",
+      "accion_si_alto": "ignorar"
+    },
+    "localsend.exe": {
+      "cat": "red", "peso_normal_mb": 40, "score_base": 75,
+      "critico": false,
+      "desc": "LocalSend para transferir archivos por red local. Útil y liviano.",
+      "accion_si_alto": "ignorar"
+    },
+    "foxitpdfreader.exe": {
+      "cat": "usuario", "peso_normal_mb": 100, "score_base": 70,
+      "critico": false,
+      "desc": "Lector PDF Foxit. Más liviano que Adobe Reader.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "applicationframehost.exe": {
+      "cat": "sistema", "peso_normal_mb": 15, "score_base": 80,
+      "critico": true,
+      "desc": "Alojo aplicaciones UWP de la tienda de Windows.",
+      "accion_si_alto": "ignorar"
+    },
+    "systemsettings.exe": {
+      "cat": "sistema", "peso_normal_mb": 20, "score_base": 80,
+      "critico": true,
+      "desc": "La aplicación de Configuración de Windows.",
+      "accion_si_alto": "ignorar"
+    },
+    "textinputhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 30, "score_base": 75,
+      "critico": false,
+      "desc": "Gestiono el teclado en pantalla y entrada táctil.",
+      "accion_si_alto": "ignorar"
+    },
+    "lockapp.exe": {
+      "cat": "sistema", "peso_normal_mb": 10, "score_base": 80,
+      "critico": true,
+      "desc": "La pantalla de bloqueo de Windows. Normal verme en espera.",
+      "accion_si_alto": "ignorar"
+    },
+    "credentialuibroker.exe": {
+      "cat": "seguridad", "peso_normal_mb": 5, "score_base": 85,
+      "critico": true,
+      "desc": "Gestiono los cuadros de diálogo de credenciales seguras.",
+      "accion_si_alto": "ignorar"
+    },
+    "smartscreen.exe": {
+      "cat": "seguridad", "peso_normal_mb": 10, "score_base": 85,
+      "critico": true,
+      "desc": "Filtro SmartScreen de Microsoft. Verifico que los programas sean seguros.",
+      "accion_si_alto": "ignorar"
+    },
+    "backgroundtaskhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 8, "score_base": 75,
+      "critico": false,
+      "desc": "Ejecuto tareas en segundo plano de apps UWP.",
+      "accion_si_alto": "ignorar"
+    },
+    "wsl.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 20, "score_base": 80,
+      "critico": false,
+      "desc": "Subsistema de Linux para Windows. Útil para desarrollo.",
+      "accion_si_alto": "ignorar"
+    },
+    "wslhost.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 30, "score_base": 80,
+      "critico": false,
+      "desc": "Host de WSL. Parte del entorno Linux dentro de Windows.",
+      "accion_si_alto": "ignorar"
+    },
+    "vmmem": {
+      "cat": "desarrollo", "peso_normal_mb": 500, "score_base": 70,
+      "critico": false,
+      "desc": "Memoria de máquina virtual WSL. Si crece mucho, hay un contenedor pesado.",
+      "accion_si_alto": "alertar"
+    },
+    "docker desktop.exe": {
+      "cat": "desarrollo", "peso_normal_mb": 600, "score_base": 65,
+      "critico": false,
+      "desc": "Docker Desktop. Muy pesado. Si Alejandro no está usando contenedores, sobra.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "msedgewebview2.exe": {
+      "cat": "basura", "peso_normal_mb": 150, "score_base": 25,
+      "critico": false,
+      "desc": "Edge incrustado en otras apps. Aparece aunque Alejandro no use Edge.",
+      "accion_si_alto": "alertar"
+    },
+    "widgets.exe": {
+      "cat": "basura", "peso_normal_mb": 100, "score_base": 15,
+      "critico": false,
+      "desc": "Widgets de Windows 11. Alejandro no los usa. Consume RAM inútilmente.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "peopleapp.exe": {
+      "cat": "basura", "peso_normal_mb": 50, "score_base": 20,
+      "critico": false,
+      "desc": "App de Contactos de Microsoft. Alejandro no la usa.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "bingweather.exe": {
+      "cat": "basura", "peso_normal_mb": 60, "score_base": 10,
+      "critico": false,
+      "desc": "Clima de Bing. Alejandro tiene su teléfono para eso. Innecesario.",
+      "accion_si_alto": "sugerir_deshabilitar"
+    },
+    "winstore.app.exe": {
+      "cat": "sistema", "peso_normal_mb": 80, "score_base": 60,
+      "critico": false,
+      "desc": "Microsoft Store. Solo necesario cuando Alejandro instala apps.",
+      "accion_si_alto": "sugerir_cerrar"
+    },
+    "crossdeviceservice.exe": {
+      "cat": "red", "peso_normal_mb": 15, "score_base": 65,
+      "critico": false,
+      "desc": "Sincronización entre dispositivos Windows. Útil con teléfono Android.",
+      "accion_si_alto": "ignorar"
+    },
+    "lenovo.exe": {
+      "cat": "sistema", "peso_normal_mb": 30, "score_base": 70,
+      "critico": false,
+      "desc": "Lenovo Vantage o servicio Lenovo. Específico para el ThinkPad.",
+      "accion_si_alto": "ignorar"
+    },
+    "lenovovantage.exe": {
+      "cat": "sistema", "peso_normal_mb": 100, "score_base": 70,
+      "critico": false,
+      "desc": "Lenovo Vantage para el ThinkPad. Útil para batería y drivers.",
+      "accion_si_alto": "ignorar"
+    },
+    "imcontrolpanel.exe": {
+      "cat": "sistema", "peso_normal_mb": 20, "score_base": 65,
+      "critico": false,
+      "desc": "Panel Intel Management Engine. Parte del hardware del ThinkPad.",
+      "accion_si_alto": "ignorar"
+    },
+    "igfxem.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 80,
+      "critico": false,
+      "desc": "Monitor de eventos Intel Graphics. Driver de mi GPU integrada UHD 620.",
+      "accion_si_alto": "ignorar"
+    },
+    "igfxtray.exe": {
+      "cat": "sistema", "peso_normal_mb": 5, "score_base": 75,
+      "critico": false,
+      "desc": "Bandeja de Intel Graphics. Parte del driver UHD 620.",
+      "accion_si_alto": "ignorar"
+    },
+    "hkcmd.exe": {
+      "cat": "sistema", "peso_normal_mb": 3, "score_base": 75,
+      "critico": false,
+      "desc": "Módulo de teclas de acceso rápido de Intel Graphics.",
+      "accion_si_alto": "ignorar"
+    },
+    "unknown": {
+      "cat": "desconocido", "peso_normal_mb": 0, "score_base": 40,
+      "critico": false,
+      "desc": "Proceso no identificado en mi base de conocimiento. Requiere análisis.",
+      "accion_si_alto": "analizar_con_groq"
+    }
+  }
+}
