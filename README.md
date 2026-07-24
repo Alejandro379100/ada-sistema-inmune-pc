@@ -47,6 +47,51 @@ pytest tests/ -v
 
 Python · SQLite · Groq API (Llama 3.3 70B / 3.1 8B) · psutil · pywin32 · pytest
 
+## Base de datos
+
+Ada guarda su historial en SQLite (`ada_cerebro.db`, generado automáticamente, no incluido en el repositorio). Algunas de sus tablas principales:
+
+```sql
+-- Snapshot periódico de RAM/CPU/disco (usado para detectar tendencias)
+CREATE TABLE historial_medico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_hora TEXT,
+    ram_libre_gb REAL,
+    ram_uso_pct REAL,
+    cpu_pct REAL,
+    disco_libre_gb REAL,
+    procesos_activos INTEGER
+);
+
+-- Auditoría de cada decisión autónoma: qué recomendó Groq, qué hizo Ada, y el resultado real
+CREATE TABLE decisiones_medico_ia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT,
+    accion TEXT,
+    riesgo TEXT,
+    razon TEXT,
+    ejecutada INTEGER,
+    resultado TEXT
+);
+
+-- Tendencia de espacio libre en disco, para predecir fugas antes de que sean críticas
+CREATE TABLE salud_ssd (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT,
+    disco_libre_gb REAL,
+    disco_total_gb REAL
+);
+```
+
+## Solución de problemas
+
+| Problema | Causa | Solución |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'pytest'` | El venv no está activado | `.\.venv\Scripts\Activate.ps1` antes de correr `pytest` |
+| `Fatal error in launcher` al correr `pytest` | Se movió la carpeta del proyecto después de crear el venv (tiene rutas absolutas grabadas) | Borrar `.venv` y recrearlo: `python -m venv .venv`, reinstalar requirements |
+| `git push` rechazado ("fetch first") | El repositorio remoto tiene cambios que tu copia local no tiene | `git pull` primero (resuelve el merge automático en la mayoría de los casos), después `git push` |
+| Timeout leyendo batería (>15s) vía WMI/PowerShell | Puntual, no confirmado como frecuente | No requiere acción salvo que se repita seguido |
+
 ## Nota
 
 Este proyecto está hecho a medida de una máquina específica (`perfil_pc.py` define sus especificaciones exactas y reglas de protección) — no es un producto genérico listo para instalar en cualquier PC sin adaptar ese archivo primero.

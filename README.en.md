@@ -47,6 +47,51 @@ pytest tests/ -v
 
 Python · SQLite · Groq API (Llama 3.3 70B / 3.1 8B) · psutil · pywin32 · pytest
 
+## Database
+
+Ada stores its history in SQLite (`ada_cerebro.db`, auto-generated, not included in the repository). Some of its main tables:
+
+```sql
+-- Periodic RAM/CPU/disk snapshot (used to detect trends)
+CREATE TABLE historial_medico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_hora TEXT,
+    ram_libre_gb REAL,
+    ram_uso_pct REAL,
+    cpu_pct REAL,
+    disco_libre_gb REAL,
+    procesos_activos INTEGER
+);
+
+-- Audit trail for every autonomous decision: what Groq recommended, what Ada did, and the real outcome
+CREATE TABLE decisiones_medico_ia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT,
+    accion TEXT,
+    riesgo TEXT,
+    razon TEXT,
+    ejecutada INTEGER,
+    resultado TEXT
+);
+
+-- Free disk space trend, to predict leaks before they become critical
+CREATE TABLE salud_ssd (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT,
+    disco_libre_gb REAL,
+    disco_total_gb REAL
+);
+```
+
+## Troubleshooting
+
+| Problem | Cause | Solution |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'pytest'` | The venv isn't activated | Run `.\.venv\Scripts\Activate.ps1` before `pytest` |
+| `Fatal error in launcher` running `pytest` | The project folder was moved after creating the venv (it has hardcoded absolute paths) | Delete `.venv` and recreate it: `python -m venv .venv`, reinstall requirements |
+| `git push` rejected ("fetch first") | The remote repository has changes your local copy doesn't have | `git pull` first (auto-resolves the merge in most cases), then `git push` |
+| Battery read timeout (>15s) via WMI/PowerShell | One-off, not confirmed as frequent | No action needed unless it repeats often |
+
 ## Note
 
 This project is tailored to one specific machine (`perfil_pc.py` defines its exact specs and protection rules) — it's not a generic product ready to install on any PC without adapting that file first.
