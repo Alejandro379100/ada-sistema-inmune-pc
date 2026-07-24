@@ -1,5 +1,7 @@
 # Ada — Sistema Inmune Personal para Windows
 
+*[English version](README.en.md)*
+
 Asistente de IA que diagnostica y repara de forma autónoma problemas de rendimiento en un PC con Windows (RAM, CPU, disco, batería, drivers, integridad del sistema), aprendiendo del historial real de la máquina en la que corre.
 
 Ada no es un limpiador genérico: cada decisión pasa por un motor de riesgo (bajo / medio / alto), una lista blanca cerrada de acciones permitidas, y un circuito de seguridad que la detiene si algo empieza a fallar en cadena. Las acciones de riesgo alto nunca se ejecutan sin confirmación humana.
