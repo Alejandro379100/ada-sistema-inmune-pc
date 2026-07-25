@@ -133,6 +133,27 @@ def _configurar_logging():
 
 _configurar_logging()
 
+
+def _print_seguro(*args, **kwargs):
+    """
+    print() normal FALLA bajo pythonw.exe sin consola (justo como
+    corre la tarea programada en modo invisible): ahí sys.stdout
+    queda vacío, y un print() sin capturar tumba todo el programa
+    con una excepción no manejada -- Ada se cierra sola sin dejar
+    ningún rastro de por qué. Esto intenta el print normal y, si
+    falla por no haber consola real, manda el mismo mensaje al log
+    en su lugar -- así el aviso no se pierde y Ada sigue viva por
+    algo tan chico como avisar que falta una variable de entorno.
+    """
+    try:
+        print(*args, **kwargs)
+    except Exception:
+        try:
+            logging.info(" ".join(str(a) for a in args))
+        except Exception:
+            pass
+
+
 # --- Configuración ---
 load_dotenv()
 
@@ -141,9 +162,9 @@ CONTRASENA_SECRETA = os.getenv("CONTRASENA_SECRETA")
 ADA_IA_DISPONIBLE  = bool(GROQ_API_KEY)
 
 if not GROQ_API_KEY:
-    print("⚠️  Falta GROQ_API_KEY — Ada funcionará sin IA.")
+    _print_seguro("⚠️  Falta GROQ_API_KEY — Ada funcionará sin IA.")
 if not CONTRASENA_SECRETA:
-    print("⚠️  Falta CONTRASENA_SECRETA — Ada sin seguridad por contraseña.")
+    _print_seguro("⚠️  Falta CONTRASENA_SECRETA — Ada sin seguridad por contraseña.")
 
 # --- Módulos de Ada ---
 import voz as voz_modulo
@@ -294,8 +315,8 @@ def configurar_arranque_windows():
         clave    = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
         bat_path = os.path.join(BASE_DIR, "iniciar_ada.bat")
         if not os.path.exists(bat_path):
-            print("⚠️  iniciar_ada.bat no encontrado — Ada no quedará en el arranque de Windows.")
-            print(f"   Créalo en: {BASE_DIR}")
+            _print_seguro("⚠️  iniciar_ada.bat no encontrado — Ada no quedará en el arranque de Windows.")
+            _print_seguro(f"   Créalo en: {BASE_DIR}")
             return
         reg = winreg.OpenKey(winreg.HKEY_CURRENT_USER, clave, 0, winreg.KEY_SET_VALUE)
         winreg.SetValueEx(reg, "Ada", 0, winreg.REG_SZ, f'"{bat_path}"')
