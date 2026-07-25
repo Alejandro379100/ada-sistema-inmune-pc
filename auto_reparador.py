@@ -160,6 +160,12 @@ def limpiar_winsxs() -> str:
         # de verdad pasó, no una promesa.
         libre_antes = psutil.disk_usage(BASE_DIR).free / (1024 ** 3)
 
+        # DISM /ResetBase puede tardar varios minutos en equipos reales
+        # (no es un cuelgue) -- se avisa antes de que el log muestre un
+        # salto largo sin actividad, para no confundirlo con que Ada
+        # dejó de responder.
+        logging.info("[REPARADOR] Limpiando WinSxS con DISM — puede tardar hasta 5 minutos.")
+
         r = subprocess.run(
             ["DISM", "/Online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"],
             capture_output=True, text=True, timeout=300,

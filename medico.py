@@ -19,6 +19,61 @@ from config import DISCO_ALERTA_LIBRE_GB, DISCO_CRITICO_LIBRE_GB, \
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ------------------------------------------
+#   NOTIFICACIÓN NATIVA DE WINDOWS
+#   Aviso al usuario cuando el médico bloquea
+#   o no puede completar una reparación sola
+# ------------------------------------------
+
+def _escapar_para_powershell(texto: str, largo_maximo: int = 200) -> str:
+    """
+    El texto que se manda a notificar (razón de Groq, nombre de
+    acción) es texto libre, no controlado por el usuario -- antes de
+    meterlo dentro de un string de PowerShell hay que escapar backtick,
+    comillas dobles y '$' (interpolación de variables), o un texto con
+    esos caracteres puede romper el script o, en el peor caso,
+    inyectar código. También se recorta la longitud y se quitan saltos
+    de línea, que igual no tienen sentido en una notificación corta.
+    """
+    if not texto:
+        return ""
+    texto = texto.replace("`", "``").replace('"', '`"').replace("$", "`$")
+    texto = texto.replace("\n", " ").replace("\r", " ")
+    return texto[:largo_maximo]
+
+def notificar_windows(titulo: str, mensaje: str):
+    """
+    Notificación toast nativa de Windows 10/11 (API
+    Windows.UI.Notifications vía PowerShell) -- sin instalar ningún
+    paquete de Python nuevo. Se usa cuando el médico autónomo bloquea
+    o no logra completar una reparación, para que el usuario se entere
+    sin tener que revisar ada_log.txt a mano.
+
+    Defensivo a propósito: si la notificación falla (PowerShell
+    bloqueado por política, sesión sin escritorio, etc.) NO debe
+    tumbar el ciclo del médico -- se registra en el log y Ada sigue
+    funcionando igual, la notificación es un extra, no una dependencia
+    crítica.
+    """
+    try:
+        titulo_seguro = _escapar_para_powershell(titulo, largo_maximo=60)
+        mensaje_seguro = _escapar_para_powershell(mensaje, largo_maximo=200)
+        script = f"""
+        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(
+            [Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+        $textos = $xml.GetElementsByTagName("text")
+        $textos[0].AppendChild($xml.CreateTextNode("{titulo_seguro}")) > $null
+        $textos[1].AppendChild($xml.CreateTextNode("{mensaje_seguro}")) > $null
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Ada").Show($toast)
+        """
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            capture_output=True, text=True, timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        logging.warning(f"[MÉDICO] No pude mandar notificación de Windows: {e}")
+
+# ------------------------------------------
 #   EVENTOS OCULTOS DE WINDOWS
 #   Ada lee errores que el usuario nunca ve
 # ------------------------------------------
@@ -528,6 +583,9 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: plan B '{accion}' lleva "
                           f"{consecutivos} fallos seguidos para '{componente}' -- bloqueado.")
+            notificar_windows("Ada — plan B bloqueado",
+                              f"{accion} (plan B) lleva {consecutivos} fallos seguidos "
+                              f"({componente}). Revisa el log.")
             return (f"verifiqué y el problema seguía, pero el plan B ({accion}) lleva "
                     f"{consecutivos} fallos seguidos -- no lo intento más sin que lo revises.")
 
@@ -567,6 +625,9 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
         )
         logging.warning(f"[MÉDICO] Plan B '{accion}' bloqueado por mal historial en "
                         f"este componente: {tasa['exitos']}/{tasa['intentos']}.")
+        notificar_windows("Ada — plan B bloqueado",
+                          f"{accion} (plan B) bloqueado por mal historial "
+                          f"({tasa['exitos']}/{tasa['intentos']}). Revisa el log.")
         return ""
 
     try:
@@ -861,6 +922,9 @@ def autodiagnostico_y_reparacion() -> str:
                 telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
                 logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' (decisión local) "
                               f"lleva {consecutivos} fallos seguidos -- bloqueada.")
+                notificar_windows("Ada — reparación bloqueada",
+                                  f"{accion} (decisión local) lleva {consecutivos} fallos "
+                                  f"seguidos ({componente}). Revisa el log.")
                 return (f"Detuve {accion}: lleva {consecutivos} fallos seguidos para este "
                         f"problema, aunque mi tasa histórica decía que confiara en ella. "
                         f"Necesito que la revises antes de seguir.")
@@ -1029,6 +1093,9 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' lleva {consecutivos} "
                           f"fallos seguidos para '{componente}' -- bloqueada, no se reintenta sola.")
+            notificar_windows("Ada — reparación bloqueada",
+                              f"{accion} lleva {consecutivos} fallos seguidos ({componente}). "
+                              f"Revisa el log.")
             return (
                 f"Detuve {accion}: lleva {consecutivos} fallos seguidos para este problema. "
                 f"No la vuelvo a intentar sola -- necesito que la revises vos antes de seguir."
@@ -1067,6 +1134,9 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             )
             logging.warning(f"[MÉDICO] '{accion}' bloqueada por mal historial: "
                             f"{tasa['exitos']}/{tasa['intentos']} éxitos recientes.")
+            notificar_windows("Ada — reparación bloqueada",
+                              f"{accion} bloqueada por mal historial "
+                              f"({tasa['exitos']}/{tasa['intentos']} éxitos). Revisa el log.")
             return (
                 f"Groq recomienda {accion} ({razon}), pero esta reparación solo tuvo "
                 f"{tasa['exitos']} de {tasa['intentos']} éxitos las últimas veces en tu equipo — "
