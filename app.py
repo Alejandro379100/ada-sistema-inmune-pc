@@ -23,23 +23,35 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ==========================================
 #   INSTANCIA ÚNICA — nunca dos Adas a la vez
 #
-#   La tarea programada "Ada - Sistema Inmune Personal" corre con
-#   /SC ONLOGON, y Windows Task Scheduler permite instancias en
-#   paralelo por defecto: si el evento de logon se dispara más de
-#   una vez (reautenticación, desbloqueo contado como logon, etc.),
-#   Ada se duplica sola sin que nadie haga nada raro. Cada copia
-#   duplicada consume su propia RAM/CPU real — no es un problema de
-#   diseño ni de "liviandad" del código, es este bug puntual.
+#   La tarea programada "Ada" corre con /SC ONLOGON, y Windows Task
+#   Scheduler permite instancias en paralelo por defecto: si el
+#   evento de logon se dispara más de una vez (reautenticación,
+#   desbloqueo contado como logon, etc.), Ada se duplica sola sin
+#   que nadie haga nada raro. Cada copia duplicada consume su propia
+#   RAM/CPU real — no es un problema de diseño ni de "liviandad" del
+#   código, es este bug puntual.
 #
 #   Se usa un mutex nombrado de Windows (patrón estándar para
 #   apps de instancia única): si ya existe, esta copia se cierra
 #   de inmediato, ANTES de configurar logging ni tocar nada más.
+#
+#   Bug real encontrado y corregido: ctypes.windll.kernel32 usa el
+#   valor de GetLastError() del hilo SIN protegerlo — entre la
+#   llamada a CreateMutexW y la lectura de GetLastError(), el propio
+#   intérprete de Python/ctypes puede hacer llamadas internas a la
+#   API de Windows que pisan ese valor antes de que este código
+#   llegue a leerlo. Por eso el mutex fallaba de forma intermitente
+#   (confirmado en ada_log.txt real: funcionó una vez y horas más
+#   tarde no, dejando dos Adas corriendo en paralelo). La forma
+#   correcta es WinDLL(..., use_last_error=True) + ctypes.get_last_error(),
+#   que sí preserva el valor real de forma segura entre llamadas.
 # ==========================================
 if os.name == "nt":
     _NOMBRE_MUTEX = "Global\\Ada_SistemaInmunePersonal_InstanciaUnica"
-    _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, _NOMBRE_MUTEX)
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _mutex = _kernel32.CreateMutexW(None, False, _NOMBRE_MUTEX)
     _ERROR_ALREADY_EXISTS = 183
-    if ctypes.windll.kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+    if ctypes.get_last_error() == _ERROR_ALREADY_EXISTS:
         try:
             with open(os.path.join(BASE_DIR, "ada_log.txt"), "a", encoding="utf-8") as f:
                 f.write(f"{time.strftime('%Y-%m-%d %H:%M')} - Ya hay una instancia de Ada corriendo. "
