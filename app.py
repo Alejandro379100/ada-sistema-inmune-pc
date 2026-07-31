@@ -339,7 +339,15 @@ def configurar_arranque_windows():
         logging.warning(f"[ARRANQUE] No pude configurar arranque automático: {e}")
 
 
-configurar_arranque_windows()
+# NOTA: ya no se llama a configurar_arranque_windows() acá. El arranque
+# automático invisible ya lo maneja por completo la tarea programada
+# "Ada" (Programador de tareas de Windows) -- esta función quedaba
+# re-escribiendo sola una clave de registro que lanzaba iniciar_ada.bat
+# SIN argumentos en cada inicio de sesión, y ese .bat sin argumentos
+# muestra su menú interactivo (una terminal visible pidiendo elegir
+# una opción) -- exactamente la ventana que no se quería ver nunca.
+# La función queda definida arriba por si en el futuro se quiere usar
+# a propósito, pero no se ejecuta sola.
 
 # ==========================================
 #   BUCLE PRINCIPAL
