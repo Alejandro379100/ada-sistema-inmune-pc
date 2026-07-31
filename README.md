@@ -92,6 +92,31 @@ CREATE TABLE salud_ssd (
 | `git push` rechazado ("fetch first") | El repositorio remoto tiene cambios que tu copia local no tiene | `git pull` primero (resuelve el merge automático en la mayoría de los casos), después `git push` |
 | Timeout leyendo batería (>15s) vía WMI/PowerShell | Puntual, no confirmado como frecuente | No requiere acción salvo que se repita seguido |
 
+## Nota técnica: ¿por qué aparecen dos procesos `pythonw.exe`?
+
+Al revisar el Administrador de tareas de Windows mientras Ada corre, vas a ver
+**dos** procesos llamados `pythonw.exe`. Esto **no es una instancia duplicada**
+de Ada — es el comportamiento estándar de los entornos virtuales de Python
+3.13+ en Windows:
+
+- El primero (`.venv\Scripts\pythonw.exe`) es un lanzador liviano que redirige
+  al Python base del sistema.
+- El segundo (`C:\PythonXXX\pythonw.exe`) es el intérprete real, el que
+  efectivamente corre el código de Ada.
+
+Es el mismo patrón en cualquier aplicación Python moderna que use un entorno
+virtual en Windows, no algo exclusivo de este proyecto. Para confirmarlo con
+tus propios ojos: abrí el Administrador de tareas → pestaña "Detalles" →
+click derecho en los encabezados de columna → "Seleccionar columnas" →
+activá "Línea de comandos". Vas a ver que cada proceso tiene una ruta
+distinta, y que el mutex de instancia única (`app.py`) solo se ejecuta una
+vez, en el proceso real — nunca hay dos Adas corriendo en paralelo.
+
+Confirmado con evidencia real (auditoría de creación de procesos de Windows,
+Event ID 4688) tras una investigación a fondo: sin este chequeo, es fácil
+confundirlo con un bug de duplicación cuando en realidad es el diseño
+esperado del propio Python.
+
 ## Nota
 
 Este proyecto está hecho a medida de una máquina específica (`perfil_pc.py` define sus especificaciones exactas y reglas de protección) — no es un producto genérico listo para instalar en cualquier PC sin adaptar ese archivo primero.
