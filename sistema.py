@@ -452,9 +452,51 @@ def _vigilar_whatsapp_tick():
 #   SISTEMA INMUNE — MONITOREO CONTINUO
 # ------------------------------------------
 
+def _pids_con_ventana_visible() -> set:
+    """
+    PIDs de todo proceso que tiene ahora mismo al menos una ventana
+    visible en pantalla -- API nativa de Windows (user32 vía ctypes,
+    sin librería nueva). Es la barrera dura antes de matar algo por
+    puntaje de RAM: si el usuario tiene una ventana abierta de ese
+    programa, Ada nunca lo toca sola en la limpieza automática, sin
+    importar qué tan bajo haya puntuado calcular_score_proceso --
+    evita cerrar algo que el usuario está usando en este momento
+    (ej. VS Code con trabajo sin guardar, un navegador con pestañas).
+
+    Defensivo a propósito: si la lectura de ventanas falla por
+    cualquier motivo, devuelve un set vacío y solo deja un warning en
+    el log -- no debe tumbar la limpieza de RAM completa por esto,
+    aunque significa que en ese ciclo puntual la limpieza corre sin
+    esta barrera extra (igual que se comportaba antes de agregarla).
+    """
+    pids = set()
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+
+        def _callback(hwnd, _lparam):
+            if user32.IsWindowVisible(hwnd) and user32.GetWindowTextLengthW(hwnd) > 0:
+                pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                pids.add(pid.value)
+            return True
+
+        user32.EnumWindows(EnumWindowsProc(_callback), 0)
+    except Exception as e:
+        logging.warning(f"[SISTEMA] No pude leer ventanas visibles, limpio sin esta barrera extra: {e}")
+    return pids
+
+
 def _limpiar_basura_autonomo() -> float:
     from puntuacion import calcular_score_proceso
 
+    # Lista blanca cerrada -- bloatware conocido que nunca aporta nada en
+    # esta máquina (mismo criterio que SERVICIOS_BASURA en
+    # auto_reparador.py). Se mata siempre, tenga ventana o no: Edge, por
+    # ejemplo, ya se cierra igual de automático en _vigilar_edge_tick.
     BASURA_AUTONOMA = [
         "msedge.exe", "gamebar.exe", "gamebarft.exe",
         "xboxgamingoverlay.exe", "widgets.exe",
@@ -462,14 +504,20 @@ def _limpiar_basura_autonomo() -> float:
     ]
 
     mb_antes = psutil.virtual_memory().available / (1024**2)
+    ventanas_visibles = _pids_con_ventana_visible()
+    pid_propio = os.getpid()
 
     for info in listar_procesos(['pid', 'name', 'memory_percent']):
         try:
             pid    = info.get('pid')
             nombre = info.get('name') or ""
+            if pid == pid_propio:
+                continue  # Ada nunca se mata a sí misma
             if any(b.lower() in nombre.lower() for b in BASURA_AUTONOMA):
                 psutil.Process(pid).kill()
                 continue
+            if pid in ventanas_visibles:
+                continue  # el usuario tiene una ventana abierta de esto -- zona "nunca toca"
             mem = info.get('memory_percent') or 0
             if mem > 3.0:
                 resultado = calcular_score_proceso(nombre, mem, 0)

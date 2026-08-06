@@ -204,6 +204,34 @@ def inicializar_db():
     """)
     con.commit()
 
+    # 9. Conocimiento confiable a largo plazo — a diferencia de
+    #    decisiones_medico_ia (que guarda TODO, éxito y fracaso, y
+    #    decae/se purga con el tiempo -- necesario para que el
+    #    circuito de seguridad siga contando fallos reales), esta
+    #    tabla es la memoria destilada: una fila por cada combinación
+    #    (accion, componente) que alguna vez quedó VERIFICADA como
+    #    reparación efectiva de verdad (mismo criterio estricto que ya
+    #    usa _inferir_exito_desde_resultado -- no "corrió sin error",
+    #    sino "se confirmó que sirvió"). No decae ni se recorta por
+    #    tamaño (no está en _limpiar_temporal ni en
+    #    _verificar_tamano_maximo) porque no crece con el tiempo: solo
+    #    hay una fila por combinación posible de acción+componente, se
+    #    actualiza (UPSERT), nunca se acumula. Así es "más espacio",
+    #    pero solo para lo que realmente importa conservar.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS reparaciones_confiables (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            accion TEXT NOT NULL,
+            componente TEXT,
+            veces_confirmado INTEGER DEFAULT 0,
+            primera_vez TEXT,
+            ultima_vez TEXT,
+            ultimo_resultado TEXT,
+            UNIQUE(accion, componente)
+        )
+    """)
+    con.commit()
+
     # LIMPIAR AL ARRANCAR — borra todo lo que no importa guardar
     _limpiar_temporal(cur, con)
 
@@ -928,6 +956,72 @@ def detectar_fugas_memoria(dias=14):
     return resultado
 
 
+def registrar_reparacion_confiable(accion, componente, resultado):
+    """
+    Escribe (o actualiza) en reparaciones_confiables — SOLO se llama
+    desde registrar_decision_medico_ia() cuando _inferir_exito_desde_
+    resultado() ya determinó exito=1, es decir, un resultado verificado
+    de verdad (no "corrió sin error", sino confirmado). UPSERT sobre
+    (accion, componente): no acumula una fila por vez, suma un contador
+    y actualiza fecha/resultado — por eso esta tabla no necesita
+    decaimiento ni límite de tamaño, ya está acotada por diseño.
+    """
+    try:
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+        cur.execute("""
+            INSERT INTO reparaciones_confiables
+                (accion, componente, veces_confirmado, primera_vez, ultima_vez, ultimo_resultado)
+            VALUES (?, ?, 1, ?, ?, ?)
+            ON CONFLICT(accion, componente) DO UPDATE SET
+                veces_confirmado = veces_confirmado + 1,
+                ultima_vez = excluded.ultima_vez,
+                ultimo_resultado = excluded.ultimo_resultado
+        """, (accion, componente, ahora, ahora, resultado[:300]))
+        con.commit()
+        con.close()
+    except Exception as e:
+        print(f"[DB ERROR] {type(e).__name__}: {e}")
+
+
+def conocimiento_confiable(componente=None, limite=10):
+    """
+    Lo que Ada sabe con certeza que funciona -- solo reparaciones que
+    en algún momento se verificaron de verdad, no intentos sueltos.
+    Si se pasa componente, filtra a ese tipo de problema (ram/ssd/
+    eventos/etc). Ordenado por veces_confirmado descendente: lo más
+    probado primero. Es la respuesta directa a "qué es realmente
+    importante y qué no" -- lectura simple de una tabla ya curada,
+    sin tener que recalcular nada sobre decisiones_medico_ia.
+    """
+    try:
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        if componente:
+            cur.execute("""
+                SELECT accion, componente, veces_confirmado, primera_vez, ultima_vez, ultimo_resultado
+                FROM reparaciones_confiables WHERE componente = ?
+                ORDER BY veces_confirmado DESC LIMIT ?
+            """, (componente, limite))
+        else:
+            cur.execute("""
+                SELECT accion, componente, veces_confirmado, primera_vez, ultima_vez, ultimo_resultado
+                FROM reparaciones_confiables
+                ORDER BY veces_confirmado DESC LIMIT ?
+            """, (limite,))
+        filas = cur.fetchall()
+        con.close()
+        return [
+            {"accion": f[0], "componente": f[1], "veces_confirmado": f[2],
+             "primera_vez": f[3], "ultima_vez": f[4], "ultimo_resultado": f[5]}
+            for f in filas
+        ]
+    except Exception as e:
+        print(f"[DB ERROR] {type(e).__name__}: {e}")
+        return []
+
+
 def registrar_decision_medico_ia(accion, riesgo, razon, ejecutada, resultado="", severidad=None, componente=None):
     """
     Deja anotado en la base de datos qué recomendó Groq y qué hizo
@@ -954,6 +1048,15 @@ def registrar_decision_medico_ia(accion, riesgo, razon, ejecutada, resultado="",
         ))
         con.commit()
         con.close()
+
+        # Memoria destilada: solo cuando quedó verificado de verdad
+        # (exito == 1, el criterio estricto de _inferir_exito_desde_
+        # resultado), no cada vez que se ejecuta algo. Va después del
+        # commit de arriba -- si esto falla, la decisión ya quedó
+        # registrada igual, no se pierde el registro operativo por un
+        # problema en la capa destilada.
+        if exito == 1:
+            registrar_reparacion_confiable(accion, componente, resultado)
     except Exception as e:
         print(f"[DB ERROR] {type(e).__name__}: {e}")
 

@@ -562,6 +562,7 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
                           tasa_exito_reparacion_por_componente, fallos_consecutivos)
     from config import (REPARACION_MINIMO_INTENTOS_PARA_EVALUAR, REPARACION_UMBRAL_TASA_EXITO_MINIMA,
                          REPARACION_LIMITE_FALLOS_CONSECUTIVOS)
+    from manual_playbook import texto_sugerido
     import telemetria
 
     accion = alternativa["accion"]
@@ -583,11 +584,13 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: plan B '{accion}' lleva "
                           f"{consecutivos} fallos seguidos para '{componente}' -- bloqueado.")
+            comando = texto_sugerido(accion)
             notificar_windows("Ada — plan B bloqueado",
                               f"{accion} (plan B) lleva {consecutivos} fallos seguidos "
-                              f"({componente}). Revisa el log.")
+                              f"({componente}).{comando or ' Revisa el log.'}")
             return (f"verifiqué y el problema seguía, pero el plan B ({accion}) lleva "
-                    f"{consecutivos} fallos seguidos -- no lo intento más sin que lo revises.")
+                    f"{consecutivos} fallos seguidos -- no lo intento más sin que lo revises."
+                    f"{comando}")
 
     if accion in ACCIONES_MEDICO_REQUIEREN_CONFIRMACION:
         registrar_decision_medico_ia(
@@ -599,7 +602,8 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
         logging.info(f"[MÉDICO] Verifiqué y '{accion_principal}' no resolvió. Plan B "
                      f"'{accion}' es riesgo alto -- queda pendiente de confirmación.")
         return (f"verifiqué y el problema seguía. Como plan B propongo {accion} ({razon}), "
-                f"pero es riesgo alto -- no la ejecuto sola. Dímelo por comando si querés.")
+                f"pero es riesgo alto -- no la ejecuto sola. Dímelo por comando si querés."
+                f"{texto_sugerido(accion)}")
 
     if accion not in ACCIONES_MEDICO_AUTOMATICAS:
         return ""  # no debería pasar (ya validado en ia.py), pero por seguridad no ejecuta nada
@@ -867,6 +871,7 @@ def autodiagnostico_y_reparacion() -> str:
                           tasa_exito_reparacion, tasa_exito_reparacion_por_componente,
                           necesita_confirmacion_por_persistencia, decision_local_confiable,
                           fallos_consecutivos)
+    from manual_playbook import texto_sugerido
     from puntuacion import calcular_severidad_diagnostico, listar_anomalias
     from config import (REPARACION_MINIMO_INTENTOS_PARA_EVALUAR, REPARACION_UMBRAL_TASA_EXITO_MINIMA,
                          REPARACION_LIMITE_FALLOS_CONSECUTIVOS)
@@ -922,12 +927,14 @@ def autodiagnostico_y_reparacion() -> str:
                 telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
                 logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' (decisión local) "
                               f"lleva {consecutivos} fallos seguidos -- bloqueada.")
+                comando = texto_sugerido(accion)
                 notificar_windows("Ada — reparación bloqueada",
                                   f"{accion} (decisión local) lleva {consecutivos} fallos "
-                                  f"seguidos ({componente}). Revisa el log.")
+                                  f"seguidos ({componente}).{comando or ' Revisa el log.'}")
                 return (f"Detuve {accion}: lleva {consecutivos} fallos seguidos para este "
                         f"problema, aunque mi tasa histórica decía que confiara en ella. "
-                        f"Necesito que la revises antes de seguir.")
+                        f"Necesito que la revises antes de seguir."
+                        f"{comando}")
 
             if accion_ejecutada_recientemente(accion, horas=24):
                 registrar_decision_medico_ia(
@@ -1067,6 +1074,7 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
                           fallos_consecutivos)
     from config import (REPARACION_MINIMO_INTENTOS_PARA_EVALUAR, REPARACION_UMBRAL_TASA_EXITO_MINIMA,
                          REPARACION_LIMITE_FALLOS_CONSECUTIVOS)
+    from manual_playbook import texto_sugerido
     import telemetria
 
     accion = item["accion"]
@@ -1093,12 +1101,14 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' lleva {consecutivos} "
                           f"fallos seguidos para '{componente}' -- bloqueada, no se reintenta sola.")
+            comando = texto_sugerido(accion)
             notificar_windows("Ada — reparación bloqueada",
-                              f"{accion} lleva {consecutivos} fallos seguidos ({componente}). "
-                              f"Revisa el log.")
+                              f"{accion} lleva {consecutivos} fallos seguidos ({componente})."
+                              f"{comando or ' Revisa el log.'}")
             return (
                 f"Detuve {accion}: lleva {consecutivos} fallos seguidos para este problema. "
                 f"No la vuelvo a intentar sola -- necesito que la revises vos antes de seguir."
+                f"{comando}"
             )
 
         # Antes esto se ejecutaba en CADA ciclo (cada 3 horas) mientras
@@ -1134,13 +1144,16 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             )
             logging.warning(f"[MÉDICO] '{accion}' bloqueada por mal historial: "
                             f"{tasa['exitos']}/{tasa['intentos']} éxitos recientes.")
+            comando = texto_sugerido(accion)
             notificar_windows("Ada — reparación bloqueada",
                               f"{accion} bloqueada por mal historial "
-                              f"({tasa['exitos']}/{tasa['intentos']} éxitos). Revisa el log.")
+                              f"({tasa['exitos']}/{tasa['intentos']} éxitos)."
+                              f"{comando or ' Revisa el log.'}")
             return (
                 f"Groq recomienda {accion} ({razon}), pero esta reparación solo tuvo "
                 f"{tasa['exitos']} de {tasa['intentos']} éxitos las últimas veces en tu equipo — "
                 f"no la ejecuto sola. Dímelo por comando si querés que la intente de todas formas."
+                f"{comando}"
             )
 
         # Nivel de confirmación intermedio: riesgo "bajo" se ejecuta
@@ -1255,6 +1268,7 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
         return (
             f"Groq recomienda {accion} ({razon}), pero es de riesgo alto — "
             f"no la ejecuto sola. Dímelo por comando cuando quieras que la haga."
+            f"{texto_sugerido(accion)}"
         )
 
     # Groq devolvió algo fuera de las dos listas — no debería pasar
