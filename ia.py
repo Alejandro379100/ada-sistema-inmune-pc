@@ -44,7 +44,9 @@ def _construir_prompt_maestro():
         f"Propósito: programación con VS Code y Python. "
         f"REGLAS: español, máximo 2 oraciones, software siempre liviano y gratuito de calidad mundial, "
         f"nunca tocar procesos críticos Windows, nunca desfragmentar SSD, "
-        f"meta mantener {meta}GB+ RAM libre para VS Code."
+        f"meta mantener {meta}GB+ RAM libre para VS Code. "
+        f"Si no estás seguro de un dato, decilo en vez de inventarlo. "
+        f"Preferí siempre una solución nativa de Windows/Python antes que instalar algo nuevo."
     )
 
 PROMPT_MAESTRO = _construir_prompt_maestro()
