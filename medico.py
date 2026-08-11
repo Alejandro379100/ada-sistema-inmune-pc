@@ -42,33 +42,41 @@ def _escapar_para_powershell(texto: str, largo_maximo: int = 200) -> str:
 
 def notificar_windows(titulo: str, mensaje: str):
     """
-    Notificación toast nativa de Windows 10/11 (API
-    Windows.UI.Notifications vía PowerShell) -- sin instalar ningún
-    paquete de Python nuevo. Se usa cuando el médico autónomo bloquea
-    o no logra completar una reparación, para que el usuario se entere
-    sin tener que revisar ada_log.txt a mano.
+    Aviso nativo de Windows -- sin instalar ningún paquete de Python
+    nuevo. Se usa cuando el médico autónomo bloquea o no logra
+    completar una reparación, para que el usuario se entere sin tener
+    que revisar ada_log.txt a mano.
 
-    Defensivo a propósito: si la notificación falla (PowerShell
-    bloqueado por política, sesión sin escritorio, etc.) NO debe
-    tumbar el ciclo del médico -- se registra en el log y Ada sigue
-    funcionando igual, la notificación es un extra, no una dependencia
-    crítica.
+    Antes usaba un toast (Windows.UI.Notifications), pero esa técnica
+    necesita que "Ada" esté registrada como app con un AUMID válido --
+    sin eso, Windows lo descarta en silencio, sin mostrar nada y sin
+    error. Un cuadro de diálogo (System.Windows.Forms.MessageBox) no
+    tiene esa dependencia: siempre aparece, y se queda en pantalla
+    hasta que el usuario lo cierra a mano -- justo lo que hace falta
+    para no perderse un aviso importante del PC.
+
+    Lanzado con Popen (no se espera a que termine) para que Ada NO se
+    quede congelada mientras el cuadro sigue abierto esperando un
+    clic -- el médico tiene que poder seguir revisando el resto del
+    sistema aunque este aviso puntual siga sin cerrarse.
+
+    Defensivo a propósito: si el aviso falla (PowerShell bloqueado
+    por política, sesión sin escritorio, etc.) NO debe tumbar el
+    ciclo del médico -- se registra en el log y Ada sigue funcionando
+    igual, el aviso es un extra, no una dependencia crítica.
     """
     try:
         titulo_seguro = _escapar_para_powershell(titulo, largo_maximo=60)
         mensaje_seguro = _escapar_para_powershell(mensaje, largo_maximo=200)
         script = f"""
-        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(
-            [Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-        $textos = $xml.GetElementsByTagName("text")
-        $textos[0].AppendChild($xml.CreateTextNode("{titulo_seguro}")) > $null
-        $textos[1].AppendChild($xml.CreateTextNode("{mensaje_seguro}")) > $null
-        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Ada").Show($toast)
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show(
+            "{mensaje_seguro}", "{titulo_seguro}",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
         """
-        subprocess.run(
+        subprocess.Popen(
             ["powershell", "-NoProfile", "-Command", script],
-            capture_output=True, text=True, timeout=10,
             creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         logging.warning(f"[MÉDICO] No pude mandar notificación de Windows: {e}")

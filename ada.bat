@@ -85,7 +85,12 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-.venv\Scripts\python.exe app.py
+REM Antes esto corria ".venv\Scripts\python.exe app.py" directo, sin
+REM revisar nada -- si Ada ya estaba corriendo invisible (arranque
+REM automatico al iniciar sesion), esto abria una SEGUNDA copia al
+REM mismo tiempo, compitiendo por el mismo ada_cerebro.db. Ahora se
+REM delega a gestionar_inicio.ps1, que revisa primero y pregunta.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0gestionar_inicio.ps1"
 
 if %errorlevel% neq 0 (
     echo.
@@ -124,7 +129,7 @@ schtasks /Create /TN "Ada - Sistema Inmune Personal" ^
     /F
 
 schtasks /Create /TN "Ada - Modo Terminal" ^
-    /TR "\"%~dp0.venv\Scripts\python.exe\" \"%~dp0app.py\"" ^
+    /TR "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0gestionar_inicio.ps1\"" ^
     /SC ONCE /ST 00:00 /RL HIGHEST /F
 
 if %errorlevel% == 0 (
