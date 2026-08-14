@@ -532,6 +532,91 @@ def _limpiar_basura_autonomo() -> float:
     mb_despues = psutil.virtual_memory().available / (1024**2)
     return max(0, mb_despues - mb_antes)
 
+def _proceso_mas_pesado_ram() -> str:
+    """
+    Nombre del proceso que más RAM usa ahora mismo (excluyendo Ada
+    misma), para que los avisos de RAM digan de entrada QUÉ está
+    pesando, no solo CUÁNTO -- antes el aviso decía "cierra programas
+    si puedes" sin decir cuál, obligando a revisar a mano con
+    Get-Process cada vez que la RAM se ponía justa. Nunca se usa para
+    decidir si matar algo (eso lo sigue haciendo
+    _limpiar_basura_autonomo con sus propias reglas) -- es solo
+    información para que la persona decida con el dato en la mano.
+    """
+    try:
+        pid_propio = os.getpid()
+        peor_nombre, peor_mb = None, 0
+        for info in listar_procesos(['pid', 'name', 'memory_info']):
+            if info.get('pid') == pid_propio:
+                continue
+            mem_info = info.get('memory_info')
+            if not mem_info:
+                continue
+            mb = mem_info.rss / (1024**2)
+            if mb > peor_mb:
+                peor_mb, peor_nombre = mb, info.get('name')
+        if peor_nombre and peor_mb > 50:
+            return f" El que más pesa ahora es {peor_nombre} ({peor_mb:.0f} MB)."
+        return ""
+    except Exception:
+        return ""
+
+
+def _limpiar_cache_windows_update() -> str:
+    """
+    Vigila C:\\Windows\\SoftwareDistribution -- la caché de descargas de
+    Windows Update. Crece sola con el tiempo (más si Ada corrió DISM
+    o sfc seguido, como pasó hoy) y Windows nunca la limpia por su
+    cuenta. Encontrado hoy con evidencia real: pesaba 2.8 GB de un
+    disco chico -- justo lo que Alejandro no quiere: que Ada mire y
+    resuelva esto sola, no que él tenga que darse cuenta y pedirlo.
+
+    Mismo patrón ya probado a mano: parar el servicio, limpiar SOLO
+    la carpeta Download (nunca la carpeta completa, para no tocar
+    nada que Windows Update necesite para su propio estado interno),
+    reiniciar el servicio. Con límite de 1GB -- por debajo de eso no
+    vale la pena el riesgo de tocar el servicio.
+    """
+    try:
+        carpeta = r"C:\Windows\SoftwareDistribution"
+        tam_bytes = sum(
+            f.stat().st_size for f in Path(carpeta).rglob('*') if f.is_file()
+        )
+        tam_gb = tam_bytes / (1024**3)
+
+        if tam_gb < 1.0:
+            return ""
+
+        subprocess.run(["net", "stop", "wuauserv"], capture_output=True,
+                        timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+
+        carpeta_download = Path(carpeta) / "Download"
+        eliminados = 0
+        if carpeta_download.exists():
+            for item in carpeta_download.iterdir():
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        item.unlink()
+                    eliminados += 1
+                except Exception:
+                    continue
+
+        subprocess.run(["net", "start", "wuauserv"], capture_output=True,
+                        timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+
+        tam_despues = sum(
+            f.stat().st_size for f in Path(carpeta).rglob('*') if f.is_file()
+        ) / (1024**3)
+        liberado = round(tam_gb - tam_despues, 1)
+        return (f"Caché de Windows Update pesaba {tam_gb:.1f} GB -- la limpié. "
+                f"Liberé {liberado} GB.")
+    except Exception as e:
+        logging.warning(f"[SISTEMA] No pude limpiar caché de Windows Update: {e}")
+        return ""
+
+
 def _evaluar_ram():
     from memoria import estado_salud_ssd
     ram          = psutil.virtual_memory()
@@ -549,7 +634,8 @@ def _evaluar_ram():
         if _hablar:
             _hablar(
                 f"RAM crítica. Actué sola: liberé recursos. "
-                f"Ahora tengo {nueva} gigabytes libres.",
+                f"Ahora tengo {nueva} gigabytes libres."
+                f"{_proceso_mas_pesado_ram()}",
                 prioridad=0
             )
         return
@@ -566,7 +652,8 @@ def _evaluar_ram():
         if ahora - ultimo_aviso >= 3600 and _hablar:
             _hablar(
                 f"Aviso: RAM al {ram.percent:.0f}%, por encima del {RAM_ALERTA_PCT}%. "
-                f"Todavía no es crítico, pero está para vigilar.",
+                f"Todavía no es crítico, pero está para vigilar."
+                f"{_proceso_mas_pesado_ram()}",
                 prioridad=2
             )
             _estado["ultimo_aviso_ram_pct"] = ahora
@@ -580,12 +667,25 @@ def _evaluar_ram():
         if _hablar:
             _hablar(
                 f"RAM al {ram.percent:.0f}%. Limpié lo que pude. "
-                f"Tengo {nueva} gigabytes libres. Cierra programas si puedes.",
+                f"Tengo {nueva} gigabytes libres. Cierra programas si puedes."
+                f"{_proceso_mas_pesado_ram()}",
                 prioridad=1
             )
         return
 
     _estado["modo"] = "normal"
+
+    # Revisión de la caché de Windows Update -- solo cuando la RAM
+    # está tranquila (no hay que competir con nada), y máximo una vez
+    # al día (parar/reiniciar un servicio de Windows no es gratis,
+    # no tiene sentido intentarlo en cada ciclo de 3 horas).
+    ahora = time.time()
+    ultima_revision_disco = _estado.get("ultima_revision_cache_wu", 0)
+    if ahora - ultima_revision_disco >= 86400:
+        _estado["ultima_revision_cache_wu"] = ahora
+        resultado_cache = _limpiar_cache_windows_update()
+        if resultado_cache and _hablar:
+            _hablar(resultado_cache, prioridad=2)
 
     try:
         from memoria import registrar_historial_medico

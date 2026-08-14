@@ -57,27 +57,27 @@ def crear_punto_restauracion(descripcion="Ada - antes de reparar") -> tuple:
 
 def reparar_archivos_sistema() -> str:
     """
-    DISM + SFC — repara corrupción de Windows.
+    SFC + DISM (solo si hace falta) — repara corrupción de Windows.
     Solo si hay señales de problema en Event Log.
+
+    Antes corría DISM /RestoreHealth SIEMPRE, antes que SFC -- pero
+    DISM /RestoreHealth revisa contra los servidores de Windows Update
+    por internet, y puede tardar mucho más que su límite de 5 minutos
+    si el equipo está bajo presión de red/RAM (ej. Windows Update
+    corriendo al mismo tiempo) -- eso disparaba TimeoutExpired y
+    cancelaba TODA la reparación, incluso cuando un simple `sfc
+    /scannow` manual (sin DISM adelante) terminaba en segundos sin
+    encontrar nada que reparar. Microsoft mismo recomienda correr sfc
+    primero: resuelve la gran mayoría de los casos sin tocar DISM en
+    absoluto. Ahora DISM solo se ejecuta si sfc de verdad no pudo
+    terminar de reparar algo -- el caso real en que hace falta.
     """
     try:
         ok_rest, msg_rest = crear_punto_restauracion("Ada - antes de reparar archivos de sistema")
         prefijo = "Creé un punto de restauración. " if ok_rest else ""
 
-        # Primero DISM — restaura la imagen base
-        r1 = subprocess.run(
-            ["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"],
-            capture_output=True, text=True, timeout=300,
-            creationflags=subprocess.CREATE_NO_WINDOW)
-        # DISM devuelve código != 0 si no pudo restaurar la imagen base
-        # (sin conexión a Windows Update, imagen corrupta más allá de
-        # lo reparable, etc.). Antes este resultado se guardaba en r1
-        # y nunca se volvía a mirar -- Ada terminaba diciendo "sistema
-        # intacto" basándose solo en lo que decía SFC, aunque DISM
-        # hubiera fallado por completo. Ahora se guarda para avisarlo.
-        dism_fallo = r1.returncode != 0
-
-        # Luego SFC — repara archivos individuales
+        # Primero SFC — rápido, repara archivos individuales, resuelve
+        # la gran mayoría de los casos sin necesitar DISM para nada.
         r2 = subprocess.run(
             ["sfc", "/scannow"],
             capture_output=True, text=True, timeout=300,
@@ -101,18 +101,33 @@ def reparar_archivos_sistema() -> str:
             "was unable to fix" in salida
         )
 
-        # El aviso de DISM va primero y siempre, independiente de lo
-        # que haya concluido SFC -- si DISM no pudo restaurar la
-        # imagen base, eso es relevante aunque SFC no haya encontrado
-        # nada raro en los archivos individuales.
-        aviso_dism = ("DISM no pudo completar la restauración de la imagen base "
-                      "(revisá tu conexión a Windows Update). ") if dism_fallo else ""
-
         if sin_problemas:
-            return f"{prefijo}{aviso_dism}Sistema de archivos intacto. No hubo nada que reparar."
+            return f"{prefijo}Sistema de archivos intacto. No hubo nada que reparar."
+
+        # Solo si sfc no pudo terminar de reparar algo se escala a
+        # DISM -- el caso real en que hace falta reconstruir la
+        # imagen base antes de que sfc pueda usarla como fuente de
+        # reparación. Este es el único camino que paga el costo de
+        # tiempo/red de DISM, no todos los ciclos.
+        aviso_dism = ""
         if reparado_parcial:
-            return (f"{prefijo}{aviso_dism}Encontré archivos dañados pero no pude reparar todos. "
-                    "Puede necesitar el medio de instalación de Windows para terminar.")
+            r1 = subprocess.run(
+                ["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"],
+                capture_output=True, text=True, timeout=300,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            dism_fallo = r1.returncode != 0
+            aviso_dism = ("DISM no pudo completar la restauración de la imagen base "
+                          "(revisá tu conexión a Windows Update). ") if dism_fallo else ""
+            if dism_fallo:
+                return (f"{prefijo}{aviso_dism}Encontré archivos dañados pero no pude reparar todos. "
+                        "Puede necesitar el medio de instalación de Windows para terminar.")
+            # DISM restauró la imagen base -- reintentar sfc una vez
+            # más con la fuente ya reparada.
+            r2b = subprocess.run(
+                ["sfc", "/scannow"],
+                capture_output=True, text=True, timeout=300,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            salida = r2b.stdout.lower()
 
         # VERIFICACIÓN REAL: antes esto confiaba en la palabra de sfc
         # de que "reparó archivos dañados" y ya. Ahora se corre una
@@ -185,27 +200,62 @@ def limpiar_cache_iconos() -> str:
     """
     Reconstruye la caché de iconos — soluciona íconos
     en blanco o que no se actualizan.
+
+    Antes intentaba borrar los archivos con el Explorador de Windows
+    corriendo -- pero esos archivos quedan ABIERTOS/bloqueados por el
+    propio explorer.exe mientras está activo, así que el borrado
+    fallaba en silencio (except: pass) y la función igual devolvía
+    "ya estaba limpia", un mensaje de éxito falso. Por eso el
+    historial marcaba 0 de 3 éxitos reales, aunque nunca hubo un
+    error visible. Ahora cierra el Explorador primero (mismo patrón
+    ya usado con el servicio de Windows Update: parar, limpiar,
+    reiniciar), borra los archivos ya desbloqueados, y lo reinicia --
+    procedimiento estándar para esto, documentado así en cualquier
+    guía seria de Windows. Aviso honesto: la barra de tareas y el
+    escritorio van a parpadear un segundo al reiniciarse, es normal.
     """
     try:
         cache_path = os.path.expandvars(
             r"%LocalAppData%\Microsoft\Windows\Explorer"
         )
+
+        subprocess.run(["taskkill", "/F", "/IM", "explorer.exe"],
+                        capture_output=True, timeout=10,
+                        creationflags=subprocess.CREATE_NO_WINDOW)
+
         eliminados = 0
+        errores_bloqueo = 0
         for f in os.listdir(cache_path):
             if f.startswith("iconcache") and f.endswith(".db"):
                 try:
                     os.remove(os.path.join(cache_path, f))
                     eliminados += 1
                 except Exception:
-                    pass
+                    errores_bloqueo += 1
+
+        # Reiniciar el Explorador siempre, pase lo que pase con el
+        # borrado -- dejar la PC sin barra de tareas ni escritorio no
+        # es una opción, aunque algo del borrado haya fallado.
+        subprocess.Popen(["explorer.exe"])
+
         if eliminados:
             subprocess.run(
                 ["ie4uinit.exe", "-show"],
                 capture_output=True, timeout=10,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+                creationflags=subprocess.CREATE_NO_WINDOW)
             return f"Caché de íconos reconstruida. Eliminé {eliminados} archivos viejos."
-        return "La caché de íconos ya estaba limpia."
+        if errores_bloqueo:
+            return (f"Cerré el Explorador pero {errores_bloqueo} archivo(s) de caché "
+                    "seguían bloqueados -- puede necesitar reiniciar la PC completa.")
+        return "La caché de íconos ya estaba limpia de verdad -- no había archivos que borrar."
     except Exception as e:
+        # Si algo falla a mitad de camino, reintentar levantar el
+        # Explorador de todas formas -- nunca dejar la PC sin barra
+        # de tareas por un error en la limpieza.
+        try:
+            subprocess.Popen(["explorer.exe"])
+        except Exception:
+            pass
         return f"Error limpiando caché de íconos: {e}"
 
 

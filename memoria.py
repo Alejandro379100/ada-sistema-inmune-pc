@@ -790,6 +790,15 @@ def _inferir_exito_desde_resultado(resultado: str, ejecutada: bool):
     marcas_exito = [
         "verificada", "liberé", "eliminé", "reconstruida",
         "completada y verificada", "de verdad",
+        # Antes estas frases quedaban en la zona ambigua (None) porque
+        # no traían ninguna marca de éxito conocida -- pero "no había
+        # nada que limpiar" es un resultado correcto, no una falla.
+        # limpiar_winsxs y limpiar_cache_iconos se estaban bloqueando
+        # por 3 ciclos seguidos de "todo estaba bien", contado como si
+        # fueran 3 fallos.
+        "no liberó espacio medible", "ya estaba limpia",
+        "ya estaba limpio", "no había archivos que borrar",
+        "ya estaban desactivados",
     ]
     marcas_fracaso = [
         "no pude", "no se pudo", "tomó demasiado tiempo",

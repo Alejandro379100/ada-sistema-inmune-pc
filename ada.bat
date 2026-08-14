@@ -17,9 +17,6 @@ REM ==========================================
 title Ada v5.0 - Sistema Inmune Personal
 cd /d "%~dp0"
 
-REM Si se llama con un argumento (ej: ada.bat iniciar), saltea el
-REM menu -- asi la tarea programada de modo terminal puede llamarlo
-REM directo sin que aparezca un menu esperando que elijas algo.
 if "%~1"=="iniciar" goto :iniciar
 if "%~1"=="instalar" goto :instalar
 if "%~1"=="desinstalar" goto :desinstalar
@@ -31,10 +28,10 @@ echo   ============================================
 echo     Ada v5.0 - Sistema Inmune Personal
 echo   ============================================
 echo.
-echo     1. Iniciar Ada
-echo     2. Instalar arranque automatico (una sola vez)
-echo     3. Desinstalar arranque automatico
-echo     4. Salir
+echo     1. Ada Terminal
+echo     2. Activar Ada Invisible
+echo     3. Desactivar Ada Invisible
+echo     4. Salir de la Terminal
 echo.
 set /p opcion="  Elegi una opcion (1-4): "
 
@@ -48,29 +45,21 @@ goto :menu
 
 REM ==========================================
 REM   1) INICIAR ADA
+REM
+REM   Antes esto disparaba una tarea programada
+REM   de Windows ("Ada - Modo Terminal") para
+REM   evitar pedir permiso de administrador cada
+REM   vez -- pero esa tarea no abria una ventana
+REM   visible al ejecutarse, entonces la opcion 1
+REM   "desaparecia" sin dejar escribirle a Ada.
+REM   Ahora va siempre directo: pide permiso cada
+REM   vez, pero SIEMPRE abre la ventana donde
+REM   podes escribirle.
 REM ==========================================
 :iniciar
-REM Si ya instalaste el arranque automatico, la tarea "Ada - Modo
-REM Terminal" ya tiene permiso de administrador dado de una vez --
-REM asi que no vuelve a pedir el cuadro de permiso de Windows.
-schtasks /Query /TN "Ada - Modo Terminal" >nul 2>&1
-if %errorlevel% == 0 (
-    schtasks /Run /TN "Ada - Modo Terminal"
-    exit /b
-)
-
-REM Si todavia no la instalaste, se auto-eleva pidiendo permiso esta vez.
 net session >nul 2>&1
 if %errorlevel% == 0 goto :admin_iniciar
 
-echo.
-echo   Ada necesita permisos de administrador para leer temperatura,
-echo   drivers y algunos diagnosticos del sistema. Va a pedirte el
-echo   permiso de Windows ahora...
-echo.
-echo   (Tip: elegi la opcion 2 del menu una vez y esto no te lo va
-echo   a volver a pedir.)
-echo.
 powershell -Command "Start-Process '%~f0' -ArgumentList 'iniciar' -Verb RunAs"
 exit /b
 
@@ -85,11 +74,9 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-REM Antes esto corria ".venv\Scripts\python.exe app.py" directo, sin
-REM revisar nada -- si Ada ya estaba corriendo invisible (arranque
-REM automatico al iniciar sesion), esto abria una SEGUNDA copia al
-REM mismo tiempo, compitiendo por el mismo ada_cerebro.db. Ahora se
-REM delega a gestionar_inicio.ps1, que revisa primero y pregunta.
+REM Revisa si Ada ya esta corriendo invisible antes de abrir el modo
+REM terminal -- evita que queden dos copias compitiendo por la misma
+REM base de datos al mismo tiempo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0gestionar_inicio.ps1"
 
 if %errorlevel% neq 0 (
@@ -101,22 +88,19 @@ exit /b
 
 REM ==========================================
 REM   2) INSTALAR ARRANQUE AUTOMATICO
-REM   Crea 2 tareas programadas, ambas con
-REM   permiso de administrador dado de una vez:
-REM   - "Ada - Sistema Inmune Personal": arranca
-REM     sola en modo invisible al iniciar sesion.
-REM   - "Ada - Modo Terminal": queda lista para
-REM     que la opcion 1 de este menu la dispare
-REM     sin pedir permiso nunca mas.
+REM   Solo crea la tarea que arranca a Ada sola,
+REM   invisible, al iniciar sesion. Ya no crea la
+REM   tarea de "Modo Terminal" -- la opcion 1 de
+REM   este menu ahora siempre abre directo.
 REM ==========================================
 :instalar
 net session >nul 2>&1
 if %errorlevel% == 0 goto :admin_instalar
 
 echo.
-echo   Necesito permisos de administrador para instalar las tareas
-echo   programadas. Va a pedirte el permiso de Windows ahora --
-echo   esta es la UNICA vez que te lo va a pedir.
+echo   Necesito permisos de administrador para instalar la tarea
+echo   programada. Va a pedirte el permiso de Windows ahora --
+echo   esta es la UNICA vez que te lo va a pedir para esto.
 echo.
 powershell -Command "Start-Process '%~f0' -ArgumentList 'instalar' -Verb RunAs"
 exit /b
@@ -128,19 +112,20 @@ schtasks /Create /TN "Ada - Sistema Inmune Personal" ^
     /RL HIGHEST ^
     /F
 
-schtasks /Create /TN "Ada - Modo Terminal" ^
-    /TR "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0gestionar_inicio.ps1\"" ^
-    /SC ONCE /ST 00:00 /RL HIGHEST /F
+REM Limpieza: si de una instalacion vieja quedo la tarea de "Modo
+REM Terminal" (ya no se usa), la borramos para no dejar basura.
+schtasks /Delete /TN "Ada - Modo Terminal" /F >nul 2>&1
 
 if %errorlevel% == 0 (
     echo.
-    echo   Listo. Desde ahora:
-    echo   - Ada arranca sola, invisible y con permisos, al iniciar sesion.
-    echo   - La opcion 1 de este menu ya no te va a pedir permiso nunca mas.
+    echo   Listo. Desde ahora Ada arranca sola, invisible y con
+    echo   permisos, al iniciar sesion. La opcion 1 de este menu
+    echo   te va a pedir permiso de administrador cada vez que la
+    echo   uses -- es normal, asi queda mas confiable.
     echo.
 ) else (
     echo.
-    echo   Algo fallo creando las tareas. Revisa el mensaje de arriba.
+    echo   Algo fallo creando la tarea. Revisa el mensaje de arriba.
     echo.
 )
 pause
@@ -158,10 +143,9 @@ exit /b
 
 :admin_desinstalar
 schtasks /Delete /TN "Ada - Sistema Inmune Personal" /F
-schtasks /Delete /TN "Ada - Modo Terminal" /F
+schtasks /Delete /TN "Ada - Modo Terminal" /F >nul 2>&1
 echo.
-echo   Listo, las tareas programadas se eliminaron. Ada ya no arranca
-echo   sola, y la opcion 1 va a volver a pedir permiso cada vez.
+echo   Listo, la tarea programada se elimino. Ada ya no arranca sola.
 echo.
 pause
 exit /b
