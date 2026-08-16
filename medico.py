@@ -565,7 +565,8 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
         alternativa con mal historial no se ejecuta solo porque el
         problema persista ahora.
     """
-    from auto_reparador import ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION
+    from auto_reparador import (ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION,
+                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada)
     from memoria import (registrar_decision_medico_ia, accion_ejecutada_recientemente,
                           tasa_exito_reparacion_por_componente, fallos_consecutivos)
     from config import (REPARACION_MINIMO_INTENTOS_PARA_EVALUAR, REPARACION_UMBRAL_TASA_EXITO_MINIMA,
@@ -624,6 +625,18 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
         )
         logging.info(f"[MÉDICO] Plan B '{accion}' en cooldown de 24h -- no se repite.")
         return ""
+
+    if accion in ACCIONES_SENSIBLES_A_RECURSOS:
+        motivo_mal_momento = condiciones_desfavorables_para_reparacion_pesada()
+        if motivo_mal_momento:
+            registrar_decision_medico_ia(
+                accion, riesgo, razon, ejecutada=False,
+                resultado=f"Plan B diferido, mal momento: {motivo_mal_momento}",
+                severidad=severidad["categoria"], componente=componente,
+            )
+            logging.info(f"[MÉDICO] Plan B '{accion}' diferido -- {motivo_mal_momento}")
+            return (f"verifiqué y el problema seguía, pero no es buen momento para {accion}: "
+                    f"{motivo_mal_momento}")
 
     tasa = tasa_exito_reparacion_por_componente(accion, componente, ultimas=5)
     if (tasa["intentos"] >= REPARACION_MINIMO_INTENTOS_PARA_EVALUAR and
@@ -1076,7 +1089,8 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
     corta que escribió Groq -- "por qué elegí esto" con números
     propios, no solo la palabra de Groq.
     """
-    from auto_reparador import ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION
+    from auto_reparador import (ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION,
+                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada)
     from memoria import (registrar_decision_medico_ia, accion_ejecutada_recientemente,
                           tasa_exito_reparacion, necesita_confirmacion_por_persistencia,
                           fallos_consecutivos)
@@ -1135,6 +1149,28 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             )
             logging.info(f"[MÉDICO] '{accion}' ya se ejecutó en las últimas 24h — no se repite.")
             return ""
+
+        # MOMENTO DESFAVORABLE (SFC/DISM): diagnosticado con log real
+        # que los fallos de 'reparar_archivos_sistema' no eran
+        # corrupción, eran RAM crítica o TiWorker.exe compitiendo por
+        # el mismo almacén WinSxS -- ver el comentario junto a
+        # ACCIONES_SENSIBLES_A_RECURSOS en auto_reparador.py. Se
+        # chequea ANTES de intentar, así un mal momento no gasta una
+        # de las 3 vidas del circuito de seguridad por una razón que
+        # no tiene nada que ver con corrupción de archivos real.
+        if accion in ACCIONES_SENSIBLES_A_RECURSOS:
+            motivo_mal_momento = condiciones_desfavorables_para_reparacion_pesada()
+            if motivo_mal_momento:
+                registrar_decision_medico_ia(
+                    accion, riesgo, razon, ejecutada=False,
+                    resultado=f"Diferida, mal momento: {motivo_mal_momento}",
+                    severidad=severidad["categoria"], componente=componente,
+                )
+                logging.info(f"[MÉDICO] '{accion}' diferida -- {motivo_mal_momento}")
+                return (
+                    f"Groq recomienda {accion} ({razon}), pero no es buen momento: "
+                    f"{motivo_mal_momento} La reintento sola en el próximo ciclo."
+                )
 
         # Red de seguridad de aprendizaje: si esta acción ya se probó
         # suficientes veces y le fue mal la mayoría, no se repite sola

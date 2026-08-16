@@ -1112,13 +1112,23 @@ $todos | ConvertTo-Json -Compress
     # ------------------------------------------
 
     if intencion == "reparar_sistema":
-        hablar("Iniciando reparacion de archivos del sistema. Puede tomar varios minutos.")
         import auto_reparador
+        motivo = auto_reparador.condiciones_desfavorables_para_reparacion_pesada()
+        if motivo:
+            auto_reparador.solicitar_reparacion_pendiente("reparar_archivos_sistema")
+            return (f"No es buen momento: {motivo} La dejo pendiente -- la hago yo sola "
+                    f"apenas se libere, no hace falta que la vuelvas a pedir.")
+        hablar("Iniciando reparacion de archivos del sistema. Puede tomar varios minutos.")
         return auto_reparador.reparar_archivos_sistema()
 
     if intencion == "limpiar_winsxs":
-        hablar("Limpiando componentes internos de Windows.")
         import auto_reparador
+        motivo = auto_reparador.condiciones_desfavorables_para_reparacion_pesada()
+        if motivo:
+            auto_reparador.solicitar_reparacion_pendiente("limpiar_winsxs")
+            return (f"No es buen momento: {motivo} La dejo pendiente -- la hago yo sola "
+                    f"apenas se libere, no hace falta que la vuelvas a pedir.")
+        hablar("Limpiando componentes internos de Windows.")
         return auto_reparador.limpiar_winsxs()
 
     if intencion == "limpiar_iconos":

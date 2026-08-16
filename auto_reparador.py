@@ -7,11 +7,102 @@
 
 import subprocess
 import os
+import json
+import time
 import logging
 import psutil
 from datetime import datetime
+from config import RAM_CRITICA_GB
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ------------------------------------------
+#   MOMENTO DESFAVORABLE PARA REPARACIONES PESADAS (SFC/DISM)
+#   Diagnosticado con log real (ago 2026): los fallos que activaron
+#   el circuito de seguridad para 'reparar_archivos_sistema' NO eran
+#   corrupción real (sfc /scannow a mano no encontró infracciones) --
+#   eran RAM crítica o TiWorker.exe (Windows Modules Installer
+#   Worker, el proceso de Windows Update) compitiendo por el mismo
+#   almacén WinSxS que SFC/DISM necesitan leer, lo que hace que la
+#   reparación tarde más de los 300s de timeout y se cancele sola.
+#   Ambas acciones de esta lista usan DISM, así que comparten el
+#   mismo riesgo de contención -- se chequea ANTES de intentar, en
+#   vez de intentar, fallar, y gastar una de las 3 vidas del
+#   circuito de seguridad por una razón que no tiene nada que ver
+#   con corrupción de archivos.
+# ------------------------------------------
+ACCIONES_SENSIBLES_A_RECURSOS = {"reparar_archivos_sistema", "limpiar_winsxs"}
+
+
+def condiciones_desfavorables_para_reparacion_pesada() -> str:
+    """
+    Devuelve un string con el motivo si el momento es malo para
+    correr SFC/DISM ahora, o "" si está todo bien para intentarlo.
+    Nunca lanza excepción hacia quien lo llama -- si algo falla al
+    medir, no bloquea la reparación por eso, sigue al chequeo
+    siguiente (o al intento real, si ya no queda ninguno por hacer).
+    """
+    try:
+        ram_libre_gb = psutil.virtual_memory().available / (1024**3)
+        if ram_libre_gb < RAM_CRITICA_GB:
+            return f"RAM crítica ({ram_libre_gb:.1f} GB libres) -- mal momento para SFC/DISM."
+    except Exception:
+        pass
+
+    try:
+        for p in psutil.process_iter(['name']):
+            nombre = (p.info.get('name') or '').lower()
+            if nombre == 'tiworker.exe':
+                return "Windows Update corriendo (TiWorker.exe) -- compite por el mismo almacén que SFC/DISM."
+    except Exception:
+        pass
+
+    return ""
+
+
+# ------------------------------------------
+#   SOLICITUD PENDIENTE (pedida a mano, terminada sola)
+#   Si el usuario pide reparar_archivos_sistema/limpiar_winsxs por
+#   terminal en mal momento, no tiene sentido hacerlo elegir "si/no"
+#   ahí mismo ni obligarlo a quedarse esperando -- se anota en un
+#   archivo (no en memoria del proceso, que se pierde si cierra la
+#   terminal) y el scheduler de sistema.py la revisa cada 3 minutos,
+#   junto con el chequeo de RAM. Apenas el momento es bueno, la
+#   ejecuta sola -- en modo invisible o en terminal, da igual, es el
+#   mismo scheduler en los dos modos.
+# ------------------------------------------
+SOLICITUD_PENDIENTE_PATH = os.path.join(BASE_DIR, "privado", "solicitud_pendiente.json")
+
+
+def solicitar_reparacion_pendiente(accion: str):
+    """Guarda una acción para ejecutarla sola en cuanto el momento
+    sea bueno. Si ya había otra pendiente, la reemplaza -- solo se
+    guarda la más reciente, no se acumula una cola."""
+    try:
+        os.makedirs(os.path.dirname(SOLICITUD_PENDIENTE_PATH), exist_ok=True)
+        with open(SOLICITUD_PENDIENTE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"accion": accion, "desde": time.time()}, f)
+    except Exception as e:
+        logging.error(f"[REPARADOR] No pude guardar la solicitud pendiente: {e}")
+
+
+def reparacion_pendiente() -> str:
+    """Nombre de la acción pendiente, o "" si no hay ninguna. Nunca
+    lanza excepción -- un archivo corrupto o ausente simplemente
+    cuenta como "no hay nada pendiente", no rompe el scheduler."""
+    try:
+        with open(SOLICITUD_PENDIENTE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("accion", "")
+    except Exception:
+        return ""
+
+
+def limpiar_reparacion_pendiente():
+    try:
+        if os.path.exists(SOLICITUD_PENDIENTE_PATH):
+            os.remove(SOLICITUD_PENDIENTE_PATH)
+    except Exception as e:
+        logging.error(f"[REPARADOR] No pude limpiar la solicitud pendiente: {e}")
 
 # ------------------------------------------
 #   PUNTO DE RESTAURACIÓN — antes de tocar nada
@@ -722,6 +813,11 @@ ACCIONES_MEDICO_REQUIEREN_CONFIRMACION = {
     "reparar_red":            reparar_red,
     "actualizar_con_winget":  actualizar_con_winget,
 }
+
+# ACCIONES_SENSIBLES_A_RECURSOS ya quedó definida más arriba, junto a
+# condiciones_desfavorables_para_reparacion_pesada() -- se deja este
+# comentario acá para que sea fácil de encontrar en el mismo lugar
+# que las otras listas de acciones al leer el archivo de arriba a abajo.
 
 
 def reporte_semanal() -> str:
