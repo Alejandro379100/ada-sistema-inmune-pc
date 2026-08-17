@@ -22,7 +22,11 @@ no reconoce por palabras clave.
      y sigue viva en segundo plano, solo cuidando el PC sin pedir nada.
 3. En ambos casos arranca `sistema._scheduler()` — un solo hilo que
    reemplaza a todos los monitores sueltos, revisando RAM/CPU/disco/
-   Edge/WhatsApp/llamadas/procesos cada cierto intervalo.
+   Edge/WhatsApp/llamadas/procesos/solicitudes pendientes cada cierto
+   intervalo.
+4. Por fuera del proceso de Ada, la tarea programada `AdaWatchdog`
+   (independiente, cada 5 min) revisa si el scheduler sigue "latiendo"
+   y reinicia a Ada si se queda trabada sin avisar.
 
 ## Los módulos, de afuera hacia adentro
 
@@ -31,17 +35,19 @@ no reconoce por palabras clave.
 | `app.py` | Arranque, logging, menú terminal/invisible, hibernación |
 | `comandos.py` | Traduce lo que escribe Alejandro a una acción concreta |
 | `ia.py` | Llamadas a Groq (respuestas + autoconocimiento del PC) |
-| `sistema.py` | El "sistema inmune": limpieza, salud, scheduler central |
+| `sistema.py` | El "sistema inmune": limpieza, salud, scheduler central, heartbeat |
 | `medico.py` | Diagnóstico profundo: Event Log, SSD (SMART), presión de RAM |
-| `auto_reparador.py` | DISM/SFC, drivers, batería, reparaciones automáticas |
+| `auto_reparador.py` | DISM/SFC, drivers, batería, reparaciones automáticas, chequeo de "buen momento" (RAM/TiWorker) y solicitud pendiente |
+| `manual_playbook.py` | Mapea componente/anomalía al comando PowerShell exacto para mostrar cuando el circuito de seguridad bloquea algo |
+| `watchdog_ada.py` | Standalone, corre por su propia tarea programada de Windows ("AdaWatchdog") — no es parte del proceso de Ada, vigila su heartbeat desde afuera |
 | `puntuacion.py` | Le pone un score 0-100 a cada proceso corriendo |
 | `nucleo_procesos.py` | **Única** puerta de entrada a `psutil.process_iter()` |
 | `perfil_pc.py` | El "ADN" del equipo: specs, rutas protegidas, rutas de limpieza |
 | `memoria.py` | SQLite: historial, caché de Groq, estadísticas |
 | `modo_enfoque.py` | Pomodoro + bloqueo de distracciones |
 | `monitor_arranque.py` | Analiza qué tan rápido/lento arrancó Windows |
-| `seguridad.py` | Contraseña para acciones destructivas (apagar, borrar, etc.) |
-| `voz.py` | Ya NO es voz real — es la terminal de texto (se dejó el nombre por compatibilidad) |
+| `seguridad.py` | Contraseña para acciones destructivas (apagar, borrar, etc.) — v4.1: hash SHA-256+sal, comparación en tiempo constante (`hmac.compare_digest`) |
+| `voz.py` | Ya NO es voz real — es la terminal de texto (se dejó el nombre por compatibilidad). El menú que imprime es `comandos.MENU`, no una copia propia |
 | `config.py` | Todos los números ajustables en un solo lugar |
 
 ## Reglas de oro que el código respeta
@@ -55,6 +61,23 @@ no reconoce por palabras clave.
 4. **Todo subprocess.run/Popen debe llevar `creationflags=subprocess.CREATE_NO_WINDOW`**
    salvo que la intención sea abrir algo visible a propósito (notepad,
    configuración de Windows, etc.).
+5. **Antes de correr SFC/DISM, chequear si el momento es bueno** —
+   `auto_reparador.condiciones_desfavorables_para_reparacion_pesada()`
+   revisa RAM crítica y `TiWorker.exe` (Windows Update) antes de
+   intentar, tanto en el camino automático (`medico.py`) como en el
+   manual (`comandos.py`). Si no es buen momento, la solicitud queda
+   pendiente en un archivo (`privado/solicitud_pendiente.json`) y el
+   scheduler la termina sola en cuanto se libera — nunca hay que
+   volver a pedirla.
+6. **El circuito de seguridad solo se resetea con éxito registrado
+   en la base de datos** — ni corriendo `sfc /scannow` a mano ni
+   pidiéndole a Ada que reintente por comando alcanza, porque los
+   comandos manuales llaman `auto_reparador.py` directo, sin pasar
+   por `memoria.registrar_decision_medico_ia`. Para confirmar que un
+   problema ya se revisó y se resolvió por fuera de Ada, existe el
+   comando "ya revise" (`memoria.confirmar_reparacion_revisada`),
+   que registra el éxito manual explícito que el circuito necesita
+   ver para reiniciar el conteo de fallos.
 
 ## Logs
 
@@ -62,6 +85,11 @@ no reconoce por palabras clave.
 y solo se guarda 1 respaldo anterior — nunca se llena el disco. Además,
 si el mismo error se repite muchas veces seguidas, el filtro anti-spam
 de `app.py` lo resume en vez de escribirlo mil veces.
+
+`watchdog_ada.py` tiene su propio log rotativo separado
+(`privado/watchdog_log.txt`, `RotatingFileHandler` nativo, 200KB/1 backup)
+— solo escribe algo cuando encuentra una anomalía real, silencio total
+es la señal de que todo anda bien.
 
 ## Historial de versiones relevante
 
@@ -73,3 +101,9 @@ de `app.py` lo resume en vez de escribirlo mil veces.
   sintaxis arreglada, rutas dinámicas con el usuario real, guardrail de
   `rutas_protegidas` conectado de verdad, logs con rotación de 5 días,
   y menú de arranque terminal/invisible.
+- **v5.0 (ago 2026)** → heartbeat + watchdog independiente contra
+  cuelgues silenciosos del scheduler; chequeo de "buen momento" antes
+  de SFC/DISM (RAM crítica / TiWorker) con solicitud pendiente que se
+  autoejecuta; confirmación manual del circuito de seguridad ("ya
+  revise"); menú de terminal unificado en una sola fuente de verdad
+  (`comandos.MENU`).

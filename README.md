@@ -13,6 +13,8 @@ Ada no es un limpiador genérico: cada decisión pasa por un motor de riesgo (ba
 - **Aprendizaje por historial**: compara el éxito real de cada acción en *esta* máquina antes de decidir actuar sola, con decaimiento temporal (un éxito de hace un mes pesa menos que uno de ayer)
 - **Verificación real**: después de actuar, vuelve a medir el sensor para confirmar si el problema se resolvió — no asume
 - **Circuito de seguridad**: se detiene sola tras fallos consecutivos, nunca dispara una restauración completa del sistema por su cuenta
+- **Consciente del momento**: antes de correr reparaciones pesadas (SFC/DISM), chequea si el equipo está en buen momento (RAM libre, sin Windows Update compitiendo por el disco) — si no, la deja pendiente y la termina sola en cuanto se libera, sin perder el pedido
+- **Heartbeat y watchdog**: el scheduler central escribe una señal de vida propia; un proceso vigilante independiente, con su propia tarea programada de Windows, reinicia a Ada si esa señal deja de actualizarse
 - **Modo texto**: se opera 100% por comandos de texto en terminal, sin reconocimiento de voz (se descartó por poco confiable)
 
 ## Arquitectura
@@ -26,6 +28,8 @@ Ada no es un limpiador genérico: cada decisión pasa por un motor de riesgo (ba
 | `memoria.py` | Persistencia SQLite, historial, aprendizaje |
 | `ia.py` | Integración con Groq, degradación en 3 niveles |
 | `auto_reparador.py` | Catálogo cerrado de reparaciones reales |
+| `manual_playbook.py` | Mapea componente/anomalía al comando PowerShell exacto cuando el circuito de seguridad bloquea una reparación |
+| `watchdog_ada.py` | Proceso independiente (tarea programada propia) que vigila el heartbeat del scheduler y reinicia a Ada si deja de responder |
 | `puntuacion.py` | Scoring y triage de procesos |
 | `fsm_medico.py` | Máquina de estados del ciclo de diagnóstico |
 | `telemetria.py` | Logging estructurado (JSON) para análisis |
@@ -36,7 +40,7 @@ Ada no es un limpiador genérico: cada decisión pasa por un motor de riesgo (ba
 
 ## Testing
 
-129 tests automatizados con `pytest`, incluyendo mocks de `winreg`, WMI y `subprocess` para poder correr la suite fuera de Windows.
+136 tests automatizados con `pytest`, incluyendo mocks de `winreg`, WMI y `subprocess` para poder correr la suite fuera de Windows.
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
@@ -120,6 +124,26 @@ esperado del propio Python.
 ## Nota
 
 Este proyecto está hecho a medida de una máquina específica (`perfil_pc.py` define sus especificaciones exactas y reglas de protección) — no es un producto genérico listo para instalar en cualquier PC sin adaptar ese archivo primero.
+
+## Un ejemplo real: diagnosticar antes de arreglar
+
+En agosto de 2026, el circuito de seguridad llevaba semanas bloqueando una
+reparación automática (`reparar_archivos_sistema`) sin explicación clara.
+En vez de asumir una causa, revisamos el log completo de 3 semanas y
+encontramos el patrón real: los fallos coincidían con `TiWorker.exe`
+(Windows Update) compitiendo por el mismo recurso que Ada necesitaba.
+Confirmamos la hipótesis con el Administrador de Tareas en tiempo real
+antes de tocar una sola línea de código.
+
+La corrección no fue "reintentar más" — fue enseñarle a Ada a reconocer
+el mal momento y diferir la reparación sola, sin perder el pedido. Al
+probarlo en Windows real encontramos una segunda pieza faltante: ni
+corriendo el comando a mano, ni con Ada, había forma de avisarle a Ada
+que un problema ya se había revisado y resuelto. Se agregó ese mecanismo,
+se probó de punta a punta, y quedó confirmado funcionando en producción.
+
+Siete tests nuevos cubren el primer chequeo (136 en total). El resto
+quedó documentado en el historial de decisiones del proyecto.
 
 ## Cómo se construyó este proyecto
 
