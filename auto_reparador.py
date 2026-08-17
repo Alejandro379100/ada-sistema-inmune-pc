@@ -104,6 +104,42 @@ def limpiar_reparacion_pendiente():
     except Exception as e:
         logging.error(f"[REPARADOR] No pude limpiar la solicitud pendiente: {e}")
 
+
+# ------------------------------------------
+#   ÚLTIMO BLOQUEO DEL CIRCUITO DE SEGURIDAD
+#   medico.py guarda acá qué acción/componente bloqueó, para que el
+#   usuario pueda confirmar "ya lo revisé" por comando sin tener que
+#   escribir el nombre exacto del componente -- Ada ya sabe de qué
+#   está hablando.
+# ------------------------------------------
+ULTIMO_BLOQUEO_PATH = os.path.join(BASE_DIR, "privado", "ultimo_bloqueo.json")
+
+
+def guardar_ultimo_bloqueo(accion: str, componente):
+    try:
+        os.makedirs(os.path.dirname(ULTIMO_BLOQUEO_PATH), exist_ok=True)
+        with open(ULTIMO_BLOQUEO_PATH, "w", encoding="utf-8") as f:
+            json.dump({"accion": accion, "componente": componente, "desde": time.time()}, f)
+    except Exception as e:
+        logging.error(f"[REPARADOR] No pude guardar el último bloqueo: {e}")
+
+
+def ultimo_bloqueo() -> dict:
+    """{} si no hay ningún bloqueo pendiente de confirmar."""
+    try:
+        with open(ULTIMO_BLOQUEO_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def limpiar_ultimo_bloqueo():
+    try:
+        if os.path.exists(ULTIMO_BLOQUEO_PATH):
+            os.remove(ULTIMO_BLOQUEO_PATH)
+    except Exception as e:
+        logging.error(f"[REPARADOR] No pude limpiar el último bloqueo: {e}")
+
 # ------------------------------------------
 #   PUNTO DE RESTAURACIÓN — antes de tocar nada
 #   No es un backup de archivos personales. Es la

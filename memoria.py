@@ -1069,6 +1069,46 @@ def registrar_decision_medico_ia(accion, riesgo, razon, ejecutada, resultado="",
     except Exception as e:
         print(f"[DB ERROR] {type(e).__name__}: {e}")
 
+def confirmar_reparacion_revisada(accion, componente, nota="Confirmado a mano por el usuario tras revision"):
+    """
+    Registra un éxito manual para resetear el circuito de seguridad
+    cuando el usuario ya revisó el problema por fuera de Ada (por
+    ejemplo, corrió sfc /scannow él mismo y confirmó que se arregló).
+
+    Sin esto, el circuito nunca se resetea solo: fallos_consecutivos()
+    solo lee decisiones_medico_ia con ejecutada=1, y esa tabla solo la
+    escribe medico.py -- los comandos manuales de comandos.py llaman
+    las funciones de auto_reparador.py directo, sin pasar por acá, así
+    que ni un éxito manual entraba nunca al historial que el circuito
+    revisa. Bug real encontrado en ago 2026: el usuario corrió
+    sfc /scannow a mano, encontró y reparó corrupción real, pero el
+    circuito de 'reparar_archivos_sistema' seguía bloqueado igual --
+    no había forma de que Ada se enterara.
+
+    exito=1 explícito (no se infiere del texto de 'nota' con
+    _inferir_exito_desde_resultado) -- es la única función de todo
+    el archivo que registra éxito sin verificación automática, así
+    que queda deliberadamente separada y visible, no mezclada con el
+    camino normal.
+    """
+    try:
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO decisiones_medico_ia
+            (fecha, accion, riesgo, razon, ejecutada, resultado, severidad, exito, componente)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            accion, "bajo", "Confirmación manual del usuario", 1, nota[:300],
+            None, 1, componente
+        ))
+        con.commit()
+        con.close()
+        registrar_reparacion_confiable(accion, componente, nota)
+    except Exception as e:
+        print(f"[DB ERROR] {type(e).__name__}: {e}")
+
 def historial_decisiones_medico_ia(limite=10):
     """Últimas decisiones del médico autónomo, para revisar o preguntarle a Ada."""
     try:

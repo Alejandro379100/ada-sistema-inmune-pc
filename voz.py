@@ -78,24 +78,14 @@ def escuchar_texto_emergencia(procesar_orden_fn, hablar_fn):
     """
     def _bucle():
         global _ultima_actividad
-        print("\n" + "=" * 55)
-        print("  ADA v5.0 - Médico autónomo de tu PC (modo texto)")
-        print("=" * 55)
-        print("  SISTEMA:")
-        print("  'como te sientes'     -> salud 0-100")
-        print("  'optimiza'            -> limpia RAM y disco")
-        print("  'diagnostico'         -> chequeo médico completo")
-        print("  'procesos pesados'    -> qué consume más")
-        print("  'cuanta ram consume vs code' -> RAM y CPU de VS Code, y por qué")
-        print("  'temperatura'         -> calor del procesador")
-        print("  PROGRAMAS:")
-        print("  'abre chrome'         -> abre Chrome")
-        print("  'abre vs code'        -> abre VS Code")
-        print("  'cierra edge'         -> cierra Edge")
-        print("  CONTROL:")
-        print("  'apaga'               -> apaga el PC")
-        print("  'salir'               -> cierra Ada")
-        print("=" * 55 + "\n")
+        # El menú vive en un solo lugar (comandos.MENU) -- antes había
+        # una copia separada acá, escrita a mano, que se desactualizó
+        # con el tiempo (le faltaban comandos reales como "limpia
+        # winsxs" o "repara el sistema", que sí funcionaban pero nadie
+        # los veía listados). Import local, no al inicio del archivo,
+        # para no arriesgar un import circular con comandos.py.
+        import comandos
+        print(comandos.MENU)
 
         while _ada_activa:
             try:

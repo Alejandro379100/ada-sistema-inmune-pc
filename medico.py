@@ -566,7 +566,8 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
         problema persista ahora.
     """
     from auto_reparador import (ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION,
-                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada)
+                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada,
+                                 guardar_ultimo_bloqueo)
     from memoria import (registrar_decision_medico_ia, accion_ejecutada_recientemente,
                           tasa_exito_reparacion_por_componente, fallos_consecutivos)
     from config import (REPARACION_MINIMO_INTENTOS_PARA_EVALUAR, REPARACION_UMBRAL_TASA_EXITO_MINIMA,
@@ -591,6 +592,7 @@ def _intentar_alternativa(alternativa: dict, severidad: dict, componente: str, a
                 severidad=severidad["categoria"], componente=componente,
             )
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
+            guardar_ultimo_bloqueo(accion, componente)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: plan B '{accion}' lleva "
                           f"{consecutivos} fallos seguidos para '{componente}' -- bloqueado.")
             comando = texto_sugerido(accion)
@@ -887,7 +889,8 @@ def autodiagnostico_y_reparacion() -> str:
     puedas revisar el historial completo.
     """
     from ia import diagnosticar_y_recomendar
-    from auto_reparador import ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION
+    from auto_reparador import (ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION,
+                                 guardar_ultimo_bloqueo)
     from memoria import (registrar_decision_medico_ia, accion_ejecutada_recientemente,
                           tasa_exito_reparacion, tasa_exito_reparacion_por_componente,
                           necesita_confirmacion_por_persistencia, decision_local_confiable,
@@ -946,6 +949,7 @@ def autodiagnostico_y_reparacion() -> str:
                     severidad=severidad["categoria"], componente=componente,
                 )
                 telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
+                guardar_ultimo_bloqueo(accion, componente)
                 logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' (decisión local) "
                               f"lleva {consecutivos} fallos seguidos -- bloqueada.")
                 comando = texto_sugerido(accion)
@@ -1090,7 +1094,8 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
     propios, no solo la palabra de Groq.
     """
     from auto_reparador import (ACCIONES_MEDICO_AUTOMATICAS, ACCIONES_MEDICO_REQUIEREN_CONFIRMACION,
-                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada)
+                                 ACCIONES_SENSIBLES_A_RECURSOS, condiciones_desfavorables_para_reparacion_pesada,
+                                 guardar_ultimo_bloqueo)
     from memoria import (registrar_decision_medico_ia, accion_ejecutada_recientemente,
                           tasa_exito_reparacion, necesita_confirmacion_por_persistencia,
                           fallos_consecutivos)
@@ -1121,6 +1126,7 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
                 severidad=severidad["categoria"], componente=componente,
             )
             telemetria.evento_circuito_seguridad(trace_id, accion, componente, consecutivos)
+            guardar_ultimo_bloqueo(accion, componente)
             logging.error(f"[MÉDICO] CIRCUITO DE SEGURIDAD: '{accion}' lleva {consecutivos} "
                           f"fallos seguidos para '{componente}' -- bloqueada, no se reintenta sola.")
             comando = texto_sugerido(accion)

@@ -219,6 +219,8 @@ INTENCIONES = {
                           "repara archivos", "corregir errores del sistema"],
     "limpiar_winsxs":    ["limpia winsxs", "limpiar componentes", "libera espacio windows"],
     "limpiar_iconos":    ["iconos rotos", "iconos en blanco", "repara iconos", "cache de iconos"],
+    "confirmar_reparacion": ["ya revise", "ya lo revise", "ya corri sfc", "confirmo la revision",
+                             "ya revise el sistema", "problema resuelto"],
     "desactivar_basura": ["desactiva servicios basura", "servicios innecesarios",
                           "optimizar servicios", "desactivar telemetria"],
     "reparar_red":       ["repara la red", "wifi lento", "dns lento", "reset red",
@@ -631,7 +633,7 @@ def _desinstalar_app_real(app: str) -> str:
 
 MENU = """
 =======================================================
-  ADA v4.0 — Medico autonomo de tu PC
+  ADA v5.0 — Medico autonomo de tu PC
 =======================================================
   SISTEMA:
   'como te sientes'       -> salud 0-100
@@ -639,6 +641,7 @@ MENU = """
   'diagnostico'           -> chequeo medico completo
   'procesos pesados'      -> que consume mas
   'temperatura'           -> calor del procesador
+  'cuanta ram consume vs code' -> RAM y CPU de VS Code, y por que
 
   MEDICO AUTONOMO:
   'salud de la bateria'   -> salud real en ciclos
@@ -650,6 +653,8 @@ MENU = """
   'que has decidido'      -> historial del medico autonomo
   'repara la red'         -> resetea DNS y Winsock
   'limpia winsxs'         -> libera hasta 3GB de Windows
+  'ya revise'             -> confirma una reparacion revisada a mano,
+                             resetea el circuito de seguridad bloqueado
 
   PROGRAMAS:
   'abre chrome'           -> abre Chrome
@@ -1134,6 +1139,19 @@ $todos | ConvertTo-Json -Compress
     if intencion == "limpiar_iconos":
         import auto_reparador
         return auto_reparador.limpiar_cache_iconos()
+
+    if intencion == "confirmar_reparacion":
+        import auto_reparador
+        from memoria import confirmar_reparacion_revisada
+        bloqueo = auto_reparador.ultimo_bloqueo()
+        if not bloqueo:
+            return "No tengo ninguna reparacion bloqueada pendiente de confirmar ahora mismo."
+        accion      = bloqueo.get("accion")
+        componente  = bloqueo.get("componente")
+        confirmar_reparacion_revisada(accion, componente)
+        auto_reparador.limpiar_ultimo_bloqueo()
+        return (f"Listo, anotado. Reinicie el circuito de seguridad de '{accion}' para "
+                f"'{componente}' -- la vuelvo a intentar sola si hace falta de nuevo.")
 
     if intencion == "desactivar_basura":
         import auto_reparador
