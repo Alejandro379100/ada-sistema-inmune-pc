@@ -1,0 +1,50 @@
+// ==========================================
+//   windows-terminal-ada.jsonc
+//   Perfil visual de Ada para Windows Terminal
+//   (fondo con imagen + esquema de color celeste)
+//
+//   Esto NO es parte del código de Ada -- es una configuración
+//   opcional de la app Windows Terminal, para quien quiera correr
+//   Ada con el mismo look que en las capturas del README.
+//
+//   CÓMO USARLO:
+//   1. Abrí Windows Terminal → Ctrl+, → "Abrir archivo JSON"
+//      (el botón está abajo a la izquierda de la pantalla de Configuración)
+//   2. Copiá el bloque de "profile" de acá abajo y pegalo dentro de
+//      tu "profiles" → "list" → [ ... ], como un elemento más de esa lista
+//      (con una coma antes si no es el primero).
+//   3. Copiá el bloque de "scheme" y pegalo dentro de tu "schemes": [ ... ]
+//   4. Cambiá las dos rutas marcadas con "<<< CAMBIAR >>>" por la ruta
+//      real donde tenés a Ada en TU computadora.
+//   5. Guardá (Ctrl+S). El perfil "Ada" va a aparecer en la lista de
+//      Windows Terminal (flechita junto al botón + de arriba).
+// ==========================================
+
+// ---- Agregar dentro de "profiles" → "list": [ ... ] ----
+{
+    "name": "Ada",
+    "commandline": "<<< CAMBIAR >>>\\ada.bat",
+    "startingDirectory": "<<< CAMBIAR >>>",
+    "colorScheme": "AdaAzul",
+    "fontSize": 16,
+    "backgroundImage": "<<< CAMBIAR >>>\\fondo_ada.png",
+    "backgroundImageOpacity": 0.35,
+    "backgroundImageAlignment": "right",
+    "backgroundImageStretchMode": "uniform"
+}
+
+// ---- Agregar dentro de "schemes": [ ... ] ----
+{
+    "name": "AdaAzul",
+    "background": "#030b03",
+    "foreground": "#B4F5FF",
+    "black": "#010401",
+    "blue": "#3CE1FF",
+    "cyan": "#3CE1FF",
+    "brightBlue": "#B4F5FF",
+    "brightCyan": "#B4F5FF",
+    "white": "#B4F5FF",
+    "brightWhite": "#FFFFFF",
+    "selectionBackground": "#204a6e",
+    "cursorColor": "#3CE1FF"
+}

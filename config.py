@@ -49,11 +49,14 @@ INTERVALO_MEDICO_IA_SEG = 10800  # Cada 3 horas: diagnóstico completo + Groq de
 #   GROQ — DOS MODELOS SEGÚN URGENCIA
 # ------------------------------------------
 # Modelo potente — para preguntas de Alejandro
-GROQ_MODELO_PRINCIPAL   = "llama-3.3-70b-versatile"
+# Groq deprecó llama-3.3-70b-versatile el 17/jun/2026 -- reemplazado
+# por el recomendado oficialmente en https://console.groq.com/docs/deprecations
+GROQ_MODELO_PRINCIPAL   = "openai/gpt-oss-120b"
 GROQ_MAX_TOKENS_PUBLICO = 120
 
 # Modelo rápido y liviano — para análisis internos silenciosos
-GROQ_MODELO_RAPIDO      = "llama-3.1-8b-instant"
+# Groq deprecó llama-3.1-8b-instant el 17/jun/2026 -- mismo reemplazo oficial
+GROQ_MODELO_RAPIDO      = "openai/gpt-oss-20b"
 GROQ_MAX_TOKENS_INTERNO = 80
 
 # ------------------------------------------

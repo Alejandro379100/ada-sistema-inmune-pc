@@ -60,6 +60,14 @@ REM ==========================================
 net session >nul 2>&1
 if %errorlevel% == 0 goto :admin_iniciar
 
+echo.
+echo   Pidiendo permisos de administrador...
+echo   Esta ventana se va a cerrar sola y va a abrir OTRA en su lugar --
+echo   es normal, no es un error. Es la unica forma en que Windows deja
+echo   pedir permisos de administrador para un script.
+echo.
+timeout /t 3 >nul
+
 powershell -Command "Start-Process '%~f0' -ArgumentList 'iniciar' -Verb RunAs"
 exit /b
 

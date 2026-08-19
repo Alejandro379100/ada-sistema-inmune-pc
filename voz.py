@@ -23,6 +23,17 @@ import threading
 from perfil_pc import PERFIL
 
 # ------------------------------------------
+#   COLOR — mismo azul de CodeLearn (#4dc3ff, el "glow" del CSS),
+#   pero llevado a un celeste eléctrico más vivo. Códigos ANSI de
+#   color verdadero (24-bit, "\033[38;2;R;G;Bm") -- los soporta
+#   Windows Terminal y la consola moderna de Windows 10+ desde que
+#   se activó VT en app.py. Sin librería nueva, cero peso.
+# ------------------------------------------
+_AZUL_ADA    = "\033[38;2;180;245;255m"  # celeste casi al tope, sin perder el tono -- lo que dice Ada
+_AZUL_TU     = "\033[38;2;32;110;150m"   # más apagado -- lo que escribís vos
+_RESET       = "\033[0m"
+
+# ------------------------------------------
 #   ESTADO GLOBAL
 # ------------------------------------------
 _ada_activa        = True
@@ -50,11 +61,19 @@ def hablar(texto, prioridad=1):
     Edge/procesos, y la conversación principal por texto) — sin el
     candado, dos mensajes impresos a la vez pueden mezclarse en la
     misma línea de la terminal.
+
+    El "\\n" inicial es a propósito: un aviso del scheduler (por
+    ejemplo, la solicitud pendiente terminándose sola) puede llegar
+    en cualquier momento, incluso mientras el usuario está a mitad
+    de escribir algo en el prompt -- sin el salto de línea, el
+    mensaje queda pegado justo arriba de lo que se estaba tipeando,
+    y en pantalla parece que Ada respondió cualquier cosa fuera de
+    contexto. No cambia nada de la lógica, solo cómo se ve.
     """
     global _ultima_actividad
     _ultima_actividad = time.time()
     with _print_lock:
-        print(f"👩 Ada: {texto}")
+        print(f"\n{_AZUL_ADA}👩 Ada: {texto}{_RESET}")
 
 
 def iniciar_cola_voz():
@@ -85,11 +104,11 @@ def escuchar_texto_emergencia(procesar_orden_fn, hablar_fn):
         # los veía listados). Import local, no al inicio del archivo,
         # para no arriesgar un import circular con comandos.py.
         import comandos
-        print(comandos.MENU)
+        print(f"{_AZUL_ADA}{comandos.MENU}{_RESET}")
 
         while _ada_activa:
             try:
-                texto = input("✍️  Tú: ").strip()
+                texto = input(f"{_AZUL_TU}✍️  Tú: {_RESET}").strip()
                 if not texto:
                     continue
                 _ultima_actividad = time.time()

@@ -21,6 +21,34 @@ from config import MINUTOS_HIBERNACION, LOG_ROTACION_DIAS, LOG_BACKUPS_MAXIMOS
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ==========================================
+#   ANSI / COLOR EN LA TERMINAL (nivel matrix)
+#   Windows 10+ ya soporta códigos ANSI nativos en su consola, pero
+#   vienen APAGADOS por defecto en el host de consola clásico
+#   (conhost.exe) -- hay que pedirlo una vez con SetConsoleMode.
+#   Sin librería nueva (nada de colorama): dos llamadas de ctypes,
+#   las mismas que ya usa el resto de app.py para el mutex y para
+#   ocultar la ventana. Si falla (por ejemplo, corriendo sin consola
+#   real en modo invisible), no importa -- ahí no hay nada que
+#   colorear de todas formas.
+# ==========================================
+def _habilitar_ansi_windows():
+    if os.name != "nt":
+        return
+    try:
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        STD_OUTPUT_HANDLE = -11
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+        modo = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(modo)):
+            kernel32.SetConsoleMode(handle, modo.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+    except Exception:
+        pass  # sin consola real (modo invisible) o algo no soportado -- no rompe nada
+
+
+_habilitar_ansi_windows()
+
+# ==========================================
 #   INSTANCIA ÚNICA — nunca dos Adas a la vez
 #
 #   La tarea programada "Ada" corre con /SC ONLOGON, y Windows Task

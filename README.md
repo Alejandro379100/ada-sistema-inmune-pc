@@ -95,6 +95,21 @@ CREATE TABLE salud_ssd (
 | `Fatal error in launcher` al correr `pytest` | Se movió la carpeta del proyecto después de crear el venv (tiene rutas absolutas grabadas) | Borrar `.venv` y recrearlo: `python -m venv .venv`, reinstalar requirements |
 | `git push` rechazado ("fetch first") | El repositorio remoto tiene cambios que tu copia local no tiene | `git pull` primero (resuelve el merge automático en la mayoría de los casos), después `git push` |
 | Timeout leyendo batería (>15s) vía WMI/PowerShell | Puntual, no confirmado como frecuente | No requiere acción salvo que se repita seguido |
+| Se abre una ventana y se cierra sola, después se abre OTRA (con el cartel de permisos de Windows en el medio) | Esperado -- `ada.bat` pide permisos de administrador para poder correr reparaciones reales (DISM/SFC). Windows solo permite pedir ese permiso cerrando la ventana actual y abriendo una nueva ya elevada | Ninguna, es el comportamiento normal. La ventana avisa esto mismo antes de cerrarse |
+
+## Personalización visual (opcional)
+
+Ada habla en un celeste eléctrico por defecto (código nativo, sin librerías —
+ver `voz.py`), así que ya se ve así corras donde corras. Si además usás
+**Windows Terminal** (no la consola clásica), podés agregarle una imagen de
+fondo y un esquema de color a juego, igual que en las capturas de este README:
+
+1. Guardá `fondo_ada.png` (incluida en este repo) en la carpeta del proyecto.
+2. Abrí `windows-terminal-ada.jsonc` (también en este repo) y seguí las
+   instrucciones de ahí — es un perfil opcional para pegar en la configuración
+   de Windows Terminal, con la ruta que tengas vos en tu computadora.
+
+Es completamente opcional — Ada funciona igual sin esto, es solo estética.
 
 ## Nota técnica: ¿por qué aparecen dos procesos `pythonw.exe`?
 
