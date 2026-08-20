@@ -114,8 +114,17 @@ def escuchar_texto_emergencia(procesar_orden_fn, hablar_fn):
                 _ultima_actividad = time.time()
                 if texto.lower() == "salir":
                     hablar_fn(f"Hasta luego {PERFIL['propietario']}.")
-                    import sys
-                    sys.exit()
+                    # sys.exit() acá NO cierra Ada -- este _bucle corre en
+                    # un hilo secundario (threading.Thread), y sys.exit()
+                    # solo lanza SystemExit dentro de ESE hilo. El hilo
+                    # principal de app.py sigue con su propio "while True:
+                    # time.sleep(1)" sin enterarse, así que la ventana
+                    # quedaba abierta con el cursor parpadeando para
+                    # siempre. os._exit() sí termina el proceso completo
+                    # de una, sin importar desde qué hilo se llame -- es
+                    # la forma correcta de cerrar Ada desde acá.
+                    import os
+                    os._exit(0)
                 respuesta = procesar_orden_fn(texto, hablar_fn)
                 if respuesta:
                     hablar_fn(respuesta)
