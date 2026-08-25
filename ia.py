@@ -17,7 +17,8 @@ from datetime import datetime
 from perfil_pc import PERFIL
 from config import (GROQ_MODELO_PRINCIPAL, GROQ_MODELO_RAPIDO,
                     GROQ_MAX_TOKENS_PUBLICO, GROQ_MAX_TOKENS_INTERNO,
-                    GROQ_TIMEOUT_PRINCIPAL_SEG, GROQ_TIMEOUT_RAPIDO_SEG)
+                    GROQ_TIMEOUT_PRINCIPAL_SEG, GROQ_TIMEOUT_RAPIDO_SEG,
+                    GROQ_REASONING_EFFORT)
 from puntuacion import calcular_score_proceso, necesita_groq, cargar_base
 
 BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
@@ -159,15 +160,26 @@ def _intentar_modelo_medico(prompt: str, resumen_diagnostico: str, modelo: str,
     default del cliente global.
     """
     r = groq_client.with_options(timeout=timeout_seg).chat.completions.create(  # type: ignore
-        model       = modelo,
-        messages    = [
+        model            = modelo,
+        messages         = [
             {"role": "system", "content": prompt},
             {"role": "user",   "content": resumen_diagnostico}
         ],
-        max_tokens  = max_tokens,
-        temperature = 0.1
+        max_tokens       = max_tokens,
+        temperature      = 0.1,
+        reasoning_effort = GROQ_REASONING_EFFORT
     )
     texto = (r.choices[0].message.content or "").strip()
+    if not texto:
+        # gpt-oss (modelo de razonamiento) puede gastar todo max_tokens
+        # pensando y no dejar nada para la respuesta -- esto lo dice
+        # explícito en el log en vez de disfrazarse de JSONDecodeError
+        # genérico.
+        raise ValueError(
+            f"Groq devolvió contenido vacío (finish_reason={r.choices[0].finish_reason!r}, "
+            f"max_tokens={max_tokens}) -- probablemente se quedó sin tokens razonando antes "
+            f"de escribir la respuesta."
+        )
     texto = texto.replace("```json", "").replace("```", "").strip()
     return json.loads(texto)
 
@@ -308,14 +320,14 @@ def diagnosticar_y_recomendar(resumen_diagnostico: str, historial_por_accion: di
 
     try:
         data = _intentar_modelo_medico(prompt, resumen_diagnostico, GROQ_MODELO_PRINCIPAL,
-                                        max_tokens=260, timeout_seg=GROQ_TIMEOUT_PRINCIPAL_SEG)
+                                        max_tokens=700, timeout_seg=GROQ_TIMEOUT_PRINCIPAL_SEG)
         nivel_usado = "groq_70b"
     except Exception as e:
         logging.warning(f"[MÉDICO IA] Groq 70B no respondió ({type(e).__name__}: {e}) -- "
                         f"probando el modelo rápido (8B).")
         try:
             data = _intentar_modelo_medico(prompt, resumen_diagnostico, GROQ_MODELO_RAPIDO,
-                                            max_tokens=220, timeout_seg=GROQ_TIMEOUT_RAPIDO_SEG)
+                                            max_tokens=500, timeout_seg=GROQ_TIMEOUT_RAPIDO_SEG)
             nivel_usado = "groq_8b"
         except Exception as e2:
             logging.warning(f"[MÉDICO IA] Groq 8B tampoco respondió ({type(e2).__name__}: {e2}) -- "
@@ -421,13 +433,14 @@ def preguntar_groq(pregunta, contexto_extra=""):
     try:
         msg = pregunta if not contexto_extra else f"{contexto_extra}\n{pregunta}"
         r   = groq_client.chat.completions.create(  # type: ignore
-            model       = GROQ_MODELO_PRINCIPAL,
-            messages    = [
+            model            = GROQ_MODELO_PRINCIPAL,
+            messages         = [
                 {"role": "system", "content": PROMPT_MAESTRO},
                 {"role": "user",   "content": msg}
             ],
-            max_tokens  = GROQ_MAX_TOKENS_PUBLICO,
-            temperature = 0.4
+            max_tokens       = GROQ_MAX_TOKENS_PUBLICO,
+            temperature      = 0.4,
+            reasoning_effort = GROQ_REASONING_EFFORT
         )
         resultado = (r.choices[0].message.content or "").strip()
 
@@ -457,13 +470,14 @@ def consulta_interna(pregunta_tecnica):
         return ""
     try:
         r = groq_client.chat.completions.create(  # type: ignore
-            model       = GROQ_MODELO_RAPIDO,
-            messages    = [
+            model            = GROQ_MODELO_RAPIDO,
+            messages         = [
                 {"role": "system", "content": PROMPT_MAESTRO},
                 {"role": "user",   "content": pregunta_tecnica}
             ],
-            max_tokens  = GROQ_MAX_TOKENS_INTERNO,
-            temperature = 0.2
+            max_tokens       = GROQ_MAX_TOKENS_INTERNO,
+            temperature      = 0.2,
+            reasoning_effort = GROQ_REASONING_EFFORT
         )
         return (r.choices[0].message.content or "").strip()
     except Exception:
@@ -487,23 +501,46 @@ def analizar_proceso_silencioso(nombre, memoria_pct, cpu_pct):
                        "medio" if resultado["score"] < 50 else "ninguno"
         }
     # Solo llega aquí si es proceso desconocido o score muy bajo
+
+    from memoria import buscar_cache_groq, guardar_cache_groq
+    # Un proceso desconocido sigue siendo el mismo proceso 10 minutos
+    # después -- sin esto, Ada le volvía a preguntar a Groq lo mismo
+    # cada ciclo de _analisis_profundo_procesos(), para siempre,
+    # gastando tokens en una respuesta que ya tenía.
+    clave_cache = f"proceso:{nombre.lower().strip()}"
+    cached = buscar_cache_groq(clave_cache)
+    if cached:
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            pass  # caché corrupta o de un formato viejo -- seguir y volver a preguntar
+
     if not GROQ_ACTIVO:
         return {"amenaza": False, "tipo": "desconocido", "accion": "ignorar",
                 "razon": "offline", "riesgo": "ninguno"}
     try:
         prompt = f"Proceso: {nombre} RAM:{memoria_pct:.1f}% CPU:{cpu_pct:.1f}%"
         r = groq_client.chat.completions.create(
-            model       = GROQ_MODELO_RAPIDO,
-            messages    = [
+            model            = GROQ_MODELO_RAPIDO,
+            messages         = [
                 {"role": "system", "content": PROMPT_INMUNE},
                 {"role": "user",   "content": prompt}
             ],
-            max_tokens  = 100,
-            temperature = 0.1
+            max_tokens       = 300,
+            temperature      = 0.1,
+            reasoning_effort = GROQ_REASONING_EFFORT
         )
         texto = (r.choices[0].message.content or "").strip()
         texto = texto.replace("```json", "").replace("```", "").strip()
-        return json.loads(texto)
+        resultado = json.loads(texto)
+
+        threading.Thread(
+            target=guardar_cache_groq,
+            args=(clave_cache, json.dumps(resultado)),
+            daemon=True
+        ).start()
+
+        return resultado
     except Exception:
         # Groq falló — respuesta segura por defecto
         return {"amenaza": False, "tipo": "seguro", "accion": "ignorar",
@@ -519,13 +556,14 @@ def recomendar_software_liviano(tarea):
         return "Necesito internet para buscar la mejor recomendación."
     try:
         r = groq_client.chat.completions.create(  # type: ignore
-            model       = GROQ_MODELO_PRINCIPAL,
-            messages    = [
+            model            = GROQ_MODELO_PRINCIPAL,
+            messages         = [
                 {"role": "system", "content": PROMPT_SOFTWARE},
                 {"role": "user",   "content": f"Tarea: {tarea}"}
             ],
-            max_tokens  = 150,
-            temperature = 0.3
+            max_tokens       = 500,
+            temperature      = 0.3,
+            reasoning_effort = GROQ_REASONING_EFFORT
         )
         texto = (r.choices[0].message.content or "").strip()
         texto = texto.replace("```json", "").replace("```", "").strip()

@@ -2,7 +2,7 @@
   "_meta": {
     "version": "1.0",
     "descripcion": "Base de conocimiento local de Ada — el PC conoce sus propios procesos",
-    "total_procesos": 120,
+    "total_procesos": 121,
     "campos": {
       "cat": "categoria: sistema|seguridad|red|usuario|basura|desarrollo|multimedia",
       "peso_normal_mb": "RAM esperada en condiciones normales",
@@ -277,6 +277,12 @@
       "desc": "WhatsApp de escritorio. Alejandro lo revisa pero no vive en él.",
       "accion_si_alto": "preguntar_cerrar"
     },
+    "whatsapp.root.exe": {
+      "cat": "usuario", "peso_normal_mb": 200, "score_base": 75,
+      "critico": false,
+      "desc": "El lanzador nuevo de WhatsApp de escritorio (empaquetado moderno de Windows). Alejandro lo usa a diario, funciona bien.",
+      "accion_si_alto": "ignorar"
+    },
     "spotify.exe": {
       "cat": "multimedia", "peso_normal_mb": 250, "score_base": 60,
       "critico": false,
@@ -389,6 +395,12 @@
       "cat": "sistema", "peso_normal_mb": 50, "score_base": 65,
       "critico": false,
       "desc": "Búsqueda de Windows. Aparezco cuando Alejandro busca algo.",
+      "accion_si_alto": "ignorar"
+    },
+    "searchhost.exe": {
+      "cat": "sistema", "peso_normal_mb": 50, "score_base": 65,
+      "critico": false,
+      "desc": "El nombre nuevo de la búsqueda de Windows 11 (reemplazó a SearchApp.exe). Aparezco cuando Alejandro busca algo, normal.",
       "accion_si_alto": "ignorar"
     },
     "yourphone.exe": {

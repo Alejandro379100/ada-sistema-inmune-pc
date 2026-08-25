@@ -1194,6 +1194,7 @@ def _procesar_accion_medico(item: dict, severidad: dict, componente: str, verifi
             )
             logging.warning(f"[MÉDICO] '{accion}' bloqueada por mal historial: "
                             f"{tasa['exitos']}/{tasa['intentos']} éxitos recientes.")
+            guardar_ultimo_bloqueo(accion, componente)
             comando = texto_sugerido(accion)
             notificar_windows("Ada — reparación bloqueada",
                               f"{accion} bloqueada por mal historial "

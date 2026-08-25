@@ -52,12 +52,22 @@ INTERVALO_MEDICO_IA_SEG = 10800  # Cada 3 horas: diagnóstico completo + Groq de
 # Groq deprecó llama-3.3-70b-versatile el 17/jun/2026 -- reemplazado
 # por el recomendado oficialmente en https://console.groq.com/docs/deprecations
 GROQ_MODELO_PRINCIPAL   = "openai/gpt-oss-120b"
-GROQ_MAX_TOKENS_PUBLICO = 120
+GROQ_MAX_TOKENS_PUBLICO = 500
 
 # Modelo rápido y liviano — para análisis internos silenciosos
 # Groq deprecó llama-3.1-8b-instant el 17/jun/2026 -- mismo reemplazo oficial
 GROQ_MODELO_RAPIDO      = "openai/gpt-oss-20b"
-GROQ_MAX_TOKENS_INTERNO = 80
+GROQ_MAX_TOKENS_INTERNO = 300
+
+# openai/gpt-oss-120b y 20b son modelos DE RAZONAMIENTO -- piensan
+# antes de responder, y ese pensamiento consume tokens del mismo
+# presupuesto que max_tokens. Con "low" gastan menos tokens pensando
+# y dejan más lugar para la respuesta real -- 'medium' (el default de
+# Groq si no se especifica) fue la causa real de que, con los límites
+# de tokens que tenía Ada antes, la respuesta llegara vacía en casi
+# todos los ciclos desde el 18/08 (confirmado: JSONDecodeError de
+# contenido vacío en el log, no un problema de Groq caído).
+GROQ_REASONING_EFFORT = "low"
 
 # ------------------------------------------
 #   DEGRADACIÓN ELEGANTE DEL PROVEEDOR DE IA
