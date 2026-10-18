@@ -799,6 +799,11 @@ def _inferir_exito_desde_resultado(resultado: str, ejecutada: bool):
         "no liberó espacio medible", "ya estaba limpia",
         "ya estaba limpio", "no había archivos que borrar",
         "ya estaban desactivados",
+        # sfc que no encontró nada dañado también es un resultado
+        # correcto. Sin esto quedaba como ambiguo (None) y nunca sumaba
+        # a favor, así que el historial de reparar_archivos_sistema no
+        # podía recuperarse solo.
+        "sistema de archivos intacto", "nada que reparar",
     ]
     marcas_fracaso = [
         "no pude", "no se pudo", "tomó demasiado tiempo",
@@ -1461,6 +1466,12 @@ def decision_local_confiable(componente, minimo_intentos=None, umbral_pct=None):
 
     if not componente:
         return None
+    # Hardware / solo informativo (bateria, drivers): ninguna acción de
+    # software los arregla, así que un "éxito" histórico ahí solo mide
+    # que la acción corrió, no que el problema mejoró. Nunca se decide
+    # sola por ellos.
+    if componente in ("bateria", "drivers"):
+        return None
     try:
         con = sqlite3.connect(DB_PATH)
         cur = con.cursor()
@@ -1534,7 +1545,7 @@ def accion_ejecutada_recientemente(accion, horas=24):
         cur.execute("""
             SELECT COUNT(*) FROM decisiones_medico_ia
             WHERE accion = ? AND ejecutada = 1
-            AND fecha >= datetime('now', ?)
+            AND fecha >= datetime('now', 'localtime', ?)
         """, (accion, f'-{horas} hours'))
         count = cur.fetchone()[0]
         con.close()

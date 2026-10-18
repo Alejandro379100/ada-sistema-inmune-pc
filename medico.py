@@ -359,13 +359,17 @@ def presion_ram() -> dict:
     # Detectar MemCompression activo
     mem_compression = False
     try:
+        # Import que faltaba: sin él, esta línea lanzaba NameError y el
+        # "except" de abajo lo tragaba en silencio, dejando
+        # mem_compression siempre en False.
+        from nucleo_procesos import listar_procesos
         for info in listar_procesos(['name']):
             nombre = info.get('name')
             if nombre and 'memcompression' in nombre.lower():
                 mem_compression = True
                 break
-    except Exception:
-        pass
+    except Exception as e:
+        logging.warning(f"[MÉDICO] No pude leer MemCompression: {e}")
 
     # Determinar presión real
     if libre_gb >= 6 and swap_gb < 0.5:
@@ -871,6 +875,32 @@ def _leer_bateria_y_drivers():
     return bateria, drivers
 
 
+def _alertar_bateria_si_critica(bateria):
+    """
+    Batería crítica es desgaste físico -- no hay ninguna reparación
+    de software para eso, así que a diferencia de RAM/CPU/eventos el
+    único trabajo de Ada acá es avisar, no actuar. Sin esto, el
+    usuario solo se entera si pide un diagnóstico completo a mano o
+    lee el log él mismo -- un dato tan importante como este merece
+    aviso proactivo, con cooldown de 7 días para no repetirlo en
+    cada reinicio.
+    """
+    if not bateria or bateria.get("estado") != "critica":
+        return
+    from auto_reparador import debe_alertar_bateria_critica, registrar_alerta_bateria
+    if not debe_alertar_bateria_critica():
+        return
+    salud_pct = bateria.get("salud_pct")
+    notificar_windows(
+        "Ada — batería crítica",
+        f"Mi batería retiene solo el {salud_pct}% de su capacidad original. "
+        f"Es desgaste físico, no lo puedo reparar por software -- te aviso "
+        f"para que decidas si vale la pena revisarla o cambiarla."
+    )
+    logging.warning(f"[MÉDICO] Batería crítica: {salud_pct}% de capacidad original. Notificado al usuario.")
+    registrar_alerta_bateria(salud_pct)
+
+
 def autodiagnostico_y_reparacion() -> str:
     """
     El médico autónomo trabajando solo: arma un resumen factual del
@@ -914,8 +944,20 @@ def autodiagnostico_y_reparacion() -> str:
     # eso necesita ser reproducible y auditable, no depender de un
     # LLM. Groq recibe este dato ya resuelto para razonar mejor su
     # elección dentro de la lista blanca.
+    # solo_accionables=True: la batería y los drivers (hardware / solo
+    # informativos) NO compiten por ser el "componente dominante" del
+    # ciclo autónomo -- si lo hicieran, tapaban a RAM/SSD/CPU, que sí
+    # tienen reparación. El aviso de batería sigue saliendo (más abajo),
+    # y diagnostico_completo() sigue mostrando la severidad completa.
     severidad = calcular_severidad_diagnostico(ssd, ram, cpu, eventos, predicciones,
-                                                bateria=bateria, drivers=drivers)
+                                                bateria=bateria, drivers=drivers,
+                                                solo_accionables=True)
+
+    # Batería es hardware: nunca hay una acción en la lista blanca
+    # para ella, así que este aviso corre siempre, sin importar qué
+    # rama tome el resto del ciclo más abajo (decisión local, Groq,
+    # cooldown de 24h, etc.) -- si no se avisa acá, no se avisa nunca.
+    _alertar_bateria_si_critica(bateria)
 
     # A partir de acá, TODO este ciclo (decisión local, plan de Groq,
     # circuito de seguridad, verificación) comparte el mismo trace_id
@@ -974,6 +1016,13 @@ def autodiagnostico_y_reparacion() -> str:
                 resultado_accion = ACCIONES_MEDICO_AUTOMATICAS[accion]()
             except Exception as e:
                 resultado_accion = f"Error ejecutando {accion}: {e}"
+            # Antes el "éxito" salía solo del texto que devolvía la acción
+            # ("lo que hice funcionó"), sin mirar si el problema del
+            # componente mejoró. Ahora, si el componente se puede re-medir
+            # (ssd/ram/cpu) y sigue mal, se anota con la marca "sin
+            # confirmar", que memoria.py cuenta como fracaso.
+            if _problema_sigue_presente(componente) is True:
+                resultado_accion += " (Verifiqué después: el problema sigue presente, mejora sin confirmar.)"
             registrar_decision_medico_ia(accion, riesgo, razon, ejecutada=True,
                                           resultado=resultado_accion, severidad=severidad["categoria"],
                                           componente=componente)
@@ -988,7 +1037,7 @@ def autodiagnostico_y_reparacion() -> str:
     # "RAM: sin problemas" cuando RAM está perfecta. Menos ruido para
     # Groq, más señal.
     anomalias = listar_anomalias(ssd, ram, cpu, eventos, predicciones,
-                                  bateria=bateria, drivers=drivers)
+                                  bateria=bateria, drivers=drivers, solo_accionables=True)
     if correlacion:
         anomalias.append(correlacion.strip())
     if predicciones:

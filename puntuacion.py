@@ -20,6 +20,12 @@ from nucleo_procesos import listar_procesos
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 PROCESOS_PATH  = os.path.join(BASE_DIR, "procesos.json")
 
+# Componentes de hardware o solo informativos: Ada AVISA, pero no hay
+# ninguna reparación por software para ellos. Si dominan la severidad,
+# tapan a los componentes sobre los que Ada sí puede actuar (RAM, SSD,
+# CPU...). Con solo_accionables=True se ignoran al decidir qué hacer.
+COMPONENTES_SOLO_AVISO = {"bateria", "drivers"}
+
 # Cache en RAM — se carga una vez al arrancar
 _base: dict = {}
 _meta: dict = {}
@@ -267,7 +273,8 @@ def snapshot_procesos() -> dict:
 
 def _listar_candidatos_severidad(ssd: dict, ram: dict, cpu: dict,
                                   eventos: list, predicciones: list,
-                                  bateria: dict = None, drivers: dict = None) -> list:
+                                  bateria: dict = None, drivers: dict = None,
+                                  solo_accionables: bool = False) -> list:
     """
     Toda la lógica de umbrales vive acá — es la ÚNICA fuente de
     verdad de qué cuenta como anomalía y qué tan grave es. Tanto
@@ -340,12 +347,16 @@ def _listar_candidatos_severidad(ssd: dict, ram: dict, cpu: dict,
         elif urgencia == "media":
             candidatos.append((25, f"prediccion_{tipo}", f"tendencia de {tipo} con urgencia media"))
 
+    if solo_accionables:
+        candidatos = [c for c in candidatos if c[1] not in COMPONENTES_SOLO_AVISO]
+
     return candidatos
 
 
 def listar_anomalias(ssd: dict, ram: dict, cpu: dict,
                       eventos: list, predicciones: list,
-                      bateria: dict = None, drivers: dict = None) -> list:
+                      bateria: dict = None, drivers: dict = None,
+                      solo_accionables: bool = False) -> list:
     """
     Triage puro: solo lo que está MAL, con números reales, ordenado
     de más a menos grave. Nada de "RAM: sin problemas" — si un
@@ -357,14 +368,16 @@ def listar_anomalias(ssd: dict, ram: dict, cpu: dict,
     Retorna lista de strings, ej: ["el disco tiene poco espacio libre", ...]
     Vacía si todo está bien.
     """
-    candidatos = _listar_candidatos_severidad(ssd, ram, cpu, eventos, predicciones, bateria, drivers)
+    candidatos = _listar_candidatos_severidad(ssd, ram, cpu, eventos, predicciones, bateria, drivers,
+                                              solo_accionables=solo_accionables)
     candidatos.sort(key=lambda c: c[0], reverse=True)
     return [detalle for _, _, detalle in candidatos]
 
 
 def calcular_severidad_diagnostico(ssd: dict, ram: dict, cpu: dict,
                                      eventos: list, predicciones: list,
-                                     bateria: dict = None, drivers: dict = None) -> dict:
+                                     bateria: dict = None, drivers: dict = None,
+                                     solo_accionables: bool = False) -> dict:
     """
     Combina ssd/ram/cpu/eventos/predicciones (las mismas estructuras
     que ya arma medico.py) en un solo puntaje de severidad 0-100 y
@@ -389,7 +402,8 @@ def calcular_severidad_diagnostico(ssd: dict, ram: dict, cpu: dict,
         "voz": str                    ← línea corta para el prompt a Groq
     }
     """
-    candidatos = _listar_candidatos_severidad(ssd, ram, cpu, eventos, predicciones, bateria, drivers)
+    candidatos = _listar_candidatos_severidad(ssd, ram, cpu, eventos, predicciones, bateria, drivers,
+                                              solo_accionables=solo_accionables)
 
     if not candidatos:
         return {

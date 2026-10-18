@@ -58,8 +58,8 @@ def test_migracion_de_base_de_datos_vieja(db_temporal, monkeypatch):
     cur.executemany(
         "INSERT INTO historial_medico (fecha, ram_libre_gb, ram_uso_pct, cpu_pct, disco_libre_gb, procesos_activos) "
         "VALUES (?,?,?,?,?,?)",
-        [("2026-07-01", 5.0, 55, 20, 80, 150),
-         ("2026-07-02", 4.8, 57, 22, 79, 152)]
+        [((datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"), 5.0, 55, 20, 80, 150),
+         ((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), 4.8, 57, 22, 79, 152)]
     )
     con.commit()
     con.close()

@@ -482,12 +482,52 @@ def test_bateria_y_drivers_llegan_al_resumen_que_ve_groq(db_temporal, monkeypatc
 
     medico.autodiagnostico_y_reparacion()
 
-    # El triage nuevo ya no repite el "voz" original completo -- usa
-    # el "detalle" corto y con números de puntuacion.listar_anomalias(),
-    # que para batería degradada incluye el % real y para drivers la
-    # cantidad sin firma.
-    assert "batería degradada al 55%" in resumen_capturado["texto"].lower()
-    assert "sin firma digital" in resumen_capturado["texto"].lower()
+    # Batería y drivers son hardware / solo informativos: si son lo ÚNICO que
+    # está mal, el médico ya no gasta una consulta a Groq (nada que reparar).
+    assert "texto" not in resumen_capturado, "Con solo batería/drivers mal, no debe consultar a Groq"
+
+
+def test_bateria_no_tapa_un_problema_real_en_el_resumen_de_groq(db_temporal, monkeypatch):
+    """
+    Si además de batería/drivers hay un problema reparable (RAM alta),
+    Groq sí se consulta, y el resumen habla de la RAM -- no de la
+    batería ni de los drivers, que son solo informativos.
+    """
+    import medico
+
+    monkeypatch.setattr(medico, "salud_ssd_completa", lambda: {"voz": "disco ok", "estado": "saludable"})
+    monkeypatch.setattr(medico, "presion_ram", lambda: {"voz": "RAM alta", "estado": "alta"})
+    monkeypatch.setattr(medico, "presion_cpu_nucleos", lambda: {"voz": "CPU ok", "estado": "saludable"})
+    monkeypatch.setattr(medico, "leer_eventos_criticos", lambda horas=24: [])
+    monkeypatch.setattr(medico, "resumir_eventos", lambda eventos: "sin errores")
+    monkeypatch.setattr(medico, "correlacionar_eventos", lambda eventos: "")
+    monkeypatch.setattr(medico, "predecir_fallos", lambda: [])
+    monkeypatch.setattr(
+        medico, "_leer_bateria_y_drivers",
+        lambda: (
+            {"estado": "degradada", "salud_pct": 55, "voz": "Alerta. Mi batería está degradada."},
+            {"total": 40, "no_firmados": 1, "estado": "riesgo", "voz": "Encontré 1 driver sin firma."},
+        )
+    )
+
+    import sistema
+    monkeypatch.setattr(sistema, "indice_salud", lambda: {"voz": "salud buena"}, raising=False)
+
+    resumen_capturado = {}
+
+    def capturar_resumen(resumen, historial_por_accion=None, componente=None):
+        resumen_capturado["texto"] = resumen
+        return {"plan": [], "razon": ""}
+
+    import ia
+    monkeypatch.setattr(ia, "diagnosticar_y_recomendar", capturar_resumen)
+
+    medico.autodiagnostico_y_reparacion()
+
+    texto = resumen_capturado["texto"].lower()
+    assert "ram bajo presión alta" in texto
+    assert "batería" not in texto
+    assert "sin firma" not in texto
 
 
 def test_diagnostico_completo_incluye_bateria_y_drivers(monkeypatch):
