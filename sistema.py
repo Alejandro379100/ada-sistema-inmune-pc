@@ -529,6 +529,72 @@ def _limpiar_basura_autonomo() -> float:
     mb_despues = psutil.virtual_memory().available / (1024**2)
     return max(0, mb_despues - mb_antes)
 
+def _verificar_bloqueo_circuito_automatico():
+    """
+    Cuando el circuito de seguridad bloquea reparar_archivos_sistema o
+    limpiar_winsxs, el patrón confirmado con log real más de una vez
+    es que los 3 fallos seguidos fueron RAM crítica o TiWorker.exe
+    compitiendo con DISM/SFC -- no corrupción real. Antes, la única
+    forma de destrabarlo era que el usuario corriera sfc /scannow a
+    mano y dijera "ya revise".
+
+    Ahora Ada se da UNA sola oportunidad de verificarlo ella misma:
+    espera al menos 1h desde el bloqueo (para no reintentar en la
+    cola del mismo mal momento que lo causó) y a que las condiciones
+    estén realmente buenas, y reintenta la acción una vez.
+
+    Si sale bien, el bloqueo se resuelve solo -- fallos_consecutivos()
+    encuentra este éxito primero y corta la racha, igual que si el
+    usuario hubiera dicho "ya revise". Si vuelve a fallar en un buen
+    momento real, YA NO se reintenta sola -- a esa altura ya no
+    parece timing, así que se marca "verificado" y vuelve a esperar
+    al usuario como siempre. Deliberadamente da como máximo UN
+    intento por bloqueo -- reintentar sin límite sería el mismo
+    problema que el circuito de seguridad existe para evitar.
+    """
+    import auto_reparador
+    bloqueo = auto_reparador.ultimo_bloqueo()
+    if not bloqueo or bloqueo.get("verificado"):
+        return
+
+    accion = bloqueo.get("accion")
+    if accion not in auto_reparador.ACCIONES_SENSIBLES_A_RECURSOS:
+        return
+
+    if (time.time() - bloqueo.get("desde", 0)) < 3600:
+        return  # muy pronto -- puede ser la cola del mismo mal momento
+
+    if auto_reparador.condiciones_desfavorables_para_reparacion_pesada():
+        return  # sigue mal momento -- se revisa de nuevo en el próximo tick
+
+    from memoria import registrar_decision_medico_ia, fallos_consecutivos
+    componente = bloqueo.get("componente")
+    try:
+        resultado = auto_reparador.ACCIONES_MEDICO_AUTOMATICAS[accion]()
+    except Exception as e:
+        resultado = f"Error ejecutando {accion}: {e}"
+
+    registrar_decision_medico_ia(
+        accion, "bajo", "auto-verificación del circuito de seguridad en buen momento",
+        ejecutada=True, resultado=resultado, componente=componente,
+    )
+
+    if fallos_consecutivos(accion, componente) == 0:
+        auto_reparador.limpiar_ultimo_bloqueo()
+        logging.info(f"[SISTEMA] Auto-verificación de '{accion}' salió bien -- circuito destrabado solo.")
+        if _hablar:
+            _hablar(f"Me volví a probar {accion} sola en buen momento y esta vez salió bien -- "
+                    f"ya no estoy bloqueada para eso.", prioridad=2)
+    else:
+        auto_reparador.marcar_bloqueo_verificado()
+        logging.warning(f"[SISTEMA] Auto-verificación de '{accion}' volvió a fallar en buen "
+                        f"momento real: {resultado}")
+        if _hablar:
+            _hablar(f"Me volví a probar {accion} sola en buen momento real y volvió a fallar. "
+                    f"Esto ya no parece timing -- corré sfc /scannow a mano cuando puedas.",
+                    prioridad=1)
+
+
 def _procesar_solicitud_pendiente():
     """
     Si quedó una reparación pesada pendiente (pedida a mano por
@@ -734,6 +800,7 @@ def _scheduler():
         "medico_ia": 0.0,
         "arranque": 0.0,
         "vigilante_tecnologico": 0.0,
+        "vigilante_groq": 0.0,
     }
     while True:
         try:
@@ -752,6 +819,7 @@ def _scheduler():
                     _evaluar_ram()
                     _evaluar_disco()
                     _procesar_solicitud_pendiente()
+                    _verificar_bloqueo_circuito_automatico()
                 except Exception as e:
                     logging.warning(f"[SCHEDULER RAM] {e}")
 
@@ -784,6 +852,16 @@ def _scheduler():
                         _hablar(resultado, prioridad=0)
                 except Exception as e:
                     logging.warning(f"[SCHEDULER VIGILANTE TECNOLÓGICO] {e}")
+
+            if ahora - _t["vigilante_groq"] >= 604800:  # cada 7 días -- suficiente
+                _t["vigilante_groq"] = ahora            # para no descontinuar sin aviso
+                try:
+                    import vigilante_groq
+                    resultado = vigilante_groq.verificar_modelos_activos()
+                    if resultado and _hablar:
+                        _hablar(resultado, prioridad=0)
+                except Exception as e:
+                    logging.warning(f"[SCHEDULER VIGILANTE GROQ] {e}")
 
             if ahora - _t["edge"] >= 1800:
                 _t["edge"] = ahora

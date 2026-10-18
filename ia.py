@@ -405,6 +405,10 @@ def iniciar_groq(api_key):
     global groq_client, GROQ_ACTIVO
     try:
         groq_client = Groq(api_key=api_key)
+        _ = groq_client.models  # fuerza resolver el import perezoso del SDK (Stainless)
+                                 # en el hilo principal, antes de que otro hilo lo dispare
+                                 # en paralelo la primera vez que se usa -- sin costo de red,
+                                 # solo acceso al atributo
         GROQ_ACTIVO = True
         print(f"✅ Groq conectado — modelo principal: {GROQ_MODELO_PRINCIPAL}")
         print(f"   Modelo rápido interno: {GROQ_MODELO_RAPIDO}")

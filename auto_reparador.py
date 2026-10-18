@@ -10,6 +10,7 @@ import os
 import json
 import time
 import logging
+import unicodedata
 import psutil
 from datetime import datetime
 from config import RAM_CRITICA_GB
@@ -133,6 +134,24 @@ def ultimo_bloqueo() -> dict:
         return {}
 
 
+def marcar_bloqueo_verificado():
+    """
+    Marca que Ada ya se dio su única oportunidad de auto-verificar
+    este bloqueo en buen momento real y volvió a fallar -- para que
+    _verificar_bloqueo_circuito_automatico() (sistema.py) no la
+    reintente en cada tick de 3 min mientras el problema siga sin
+    resolverse. A partir de acá vuelve a depender de "ya revise".
+    """
+    try:
+        datos = ultimo_bloqueo()
+        if datos:
+            datos["verificado"] = True
+            with open(ULTIMO_BLOQUEO_PATH, "w", encoding="utf-8") as f:
+                json.dump(datos, f)
+    except Exception as e:
+        logging.error(f"[REPARADOR] No pude marcar el bloqueo como verificado: {e}")
+
+
 def limpiar_ultimo_bloqueo():
     try:
         if os.path.exists(ULTIMO_BLOQUEO_PATH):
@@ -182,104 +201,153 @@ def crear_punto_restauracion(descripcion="Ada - antes de reparar") -> tuple:
 #   REPARACIONES SEGURAS — Ada actúa sola
 # ------------------------------------------
 
+# ------------------------------------------
+#   LECTURA ROBUSTA DE LA SALIDA DE SFC / DISM
+#   sfc.exe escribe su salida en UTF-16 cuando se captura por tubería:
+#   leída como texto normal queda con un byte nulo entre cada letra
+#   ("P\x00r\x00o\x00...") y ninguna frase coincide, aunque el mensaje
+#   sea el correcto. Además el texto sale en el idioma de Windows
+#   ("no encontró ninguna infracción..."), con tildes. Por eso se lee en
+#   bytes, se decodifica según lo que traiga, y se compara sin tildes.
+# ------------------------------------------
+
+def _decodificar_salida(datos) -> str:
+    """bytes | str | None -> str sin bytes nulos."""
+    if datos is None:
+        return ""
+    if isinstance(datos, str):
+        return datos.replace("\x00", "")
+    if b"\x00" in datos:
+        return datos.decode("utf-16-le", errors="replace").lstrip("\ufeff").replace("\x00", "")
+    try:
+        return datos.decode("oem", errors="replace")  # consola de Windows (DISM)
+    except LookupError:  # "oem" solo existe en Windows (p.ej. tests en Linux/Mac)
+        return datos.decode("utf-8", errors="replace")
+
+
+def _normalizar(texto: str) -> str:
+    """Minúsculas y sin tildes, para comparar frases sin depender de acentos."""
+    sin_tildes = unicodedata.normalize("NFD", texto.lower())
+    return "".join(c for c in sin_tildes if unicodedata.category(c) != "Mn")
+
+
+def _correr(comando, timeout):
+    """Corre un comando y devuelve (codigo_de_salida, salida_normalizada, salida_original)."""
+    r = subprocess.run(
+        comando, capture_output=True, timeout=timeout,
+        creationflags=subprocess.CREATE_NO_WINDOW)
+    original = _decodificar_salida(r.stdout) + _decodificar_salida(getattr(r, "stderr", None))
+    return r.returncode, _normalizar(original), original
+
+
+_SFC_INTACTO = ("no encontro ninguna infraccion", "no se encontraron infracciones",
+                "did not find any integrity violations")
+_SFC_NO_PUDO = ("no pudo reparar", "unable to fix")
+# Cubre "...y los reparó correctamente" (mensaje real de sfc en español),
+# "...and successfully repaired them" (inglés) y variantes cortas.
+_SFC_REPARO = ("los reparo", "successfully repaired", "repaired them")
+
+
+def _clasificar_sfc(salida_normalizada: str) -> str:
+    """'intacto' | 'parcial' | 'reparado' | 'desconocido'."""
+    if any(f in salida_normalizada for f in _SFC_INTACTO):
+        return "intacto"
+    if any(f in salida_normalizada for f in _SFC_NO_PUDO):
+        return "parcial"
+    if any(f in salida_normalizada for f in _SFC_REPARO):
+        return "reparado"
+    return "desconocido"
+
+
+# DISM devuelve 3010 (ERROR_SUCCESS_REBOOT_REQUIRED) cuando terminó bien pero
+# Windows pide reiniciar para completar -- eso NO es un fallo.
+_DISM_CODIGOS_OK = (0, 3010)
+
+
+def _resumen_error(salida_original: str, maximo=200) -> str:
+    """Últimas líneas útiles de la salida, en una sola línea, para el log."""
+    lineas = [l.strip() for l in salida_original.splitlines() if l.strip()]
+    return " | ".join(lineas[-3:])[:maximo]
+
+
 def reparar_archivos_sistema() -> str:
     """
-    SFC + DISM (solo si hace falta) — repara corrupción de Windows.
+    SFC primero; DISM solo si SFC no pudo terminar de reparar algo.
     Solo si hay señales de problema en Event Log.
 
-    Antes corría DISM /RestoreHealth SIEMPRE, antes que SFC -- pero
-    DISM /RestoreHealth revisa contra los servidores de Windows Update
-    por internet, y puede tardar mucho más que su límite de 5 minutos
-    si el equipo está bajo presión de red/RAM (ej. Windows Update
-    corriendo al mismo tiempo) -- eso disparaba TimeoutExpired y
-    cancelaba TODA la reparación, incluso cuando un simple `sfc
-    /scannow` manual (sin DISM adelante) terminaba en segundos sin
-    encontrar nada que reparar. Microsoft mismo recomienda correr sfc
-    primero: resuelve la gran mayoría de los casos sin tocar DISM en
-    absoluto. Ahora DISM solo se ejecuta si sfc de verdad no pudo
-    terminar de reparar algo -- el caso real en que hace falta.
+    DISM /RestoreHealth consulta Windows Update por internet y puede
+    tardar más que su límite de 5 minutos si el equipo está bajo presión
+    de red/RAM. Microsoft recomienda correr sfc primero: resuelve la
+    gran mayoría de los casos sin tocar DISM.
+
+    Resultados posibles (los textos alimentan _inferir_exito_desde_resultado
+    en memoria.py, no cambiarlos sin mirar esa función):
+      intacto     -> "...intacto. No hubo nada que reparar."
+      reparado    -> "...VERIFICADA..." o "no pude confirmar..."
+      parcial     -> DISM + segundo sfc; si DISM falla, lo dice
+      desconocido -> "no reconocido" (no cuenta ni como éxito ni fallo)
     """
     try:
         ok_rest, msg_rest = crear_punto_restauracion("Ada - antes de reparar archivos de sistema")
         prefijo = "Creé un punto de restauración. " if ok_rest else ""
 
-        # Primero SFC — rápido, repara archivos individuales, resuelve
-        # la gran mayoría de los casos sin necesitar DISM para nada.
-        r2 = subprocess.run(
-            ["sfc", "/scannow"],
-            capture_output=True, text=True, timeout=300,
-            creationflags=subprocess.CREATE_NO_WINDOW)
-        salida = r2.stdout.lower()
+        # Aviso ANTES de arrancar: si el usuario apaga el equipo en medio
+        # de SFC/DISM, el punto de restauración ya da una forma de deshacerlo.
+        try:
+            from medico import notificar_windows
+            notificar_windows("Ada — reparación en curso",
+                              "Voy a revisar archivos del sistema (SFC/DISM), puede tardar "
+                              "unos minutos. Si podés, esperá antes de apagar el equipo.")
+        except Exception:
+            pass
 
-        # Antes esto solo reconocía 2 frases exactas para decir "todo
-        # intacto" — cualquier otra salida de sfc (windows en otro
-        # idioma, u otra redacción) caía por defecto en "encontró y
-        # corrigió archivos dañados", incluso si no encontró nada. Con
-        # el médico autónomo corriendo esto cada 3 horas, ese mensaje
-        # genérico se repetía sin que quedara claro si de verdad había
-        # algo que arreglar. Ahora se distinguen 3 casos reales.
-        sin_problemas = (
-            "no se encontraron infracciones" in salida or
-            "did not find any integrity violations" in salida
-        )
-        reparado_parcial = (
-            "no pudo reparar" in salida or
-            "unable to fix" in salida or
-            "was unable to fix" in salida
-        )
+        rc, salida, original = _correr(["sfc", "/scannow"], 300)
+        estado = _clasificar_sfc(salida)
 
-        if sin_problemas:
+        if estado == "intacto":
             return f"{prefijo}Sistema de archivos intacto. No hubo nada que reparar."
 
-        # Solo si sfc no pudo terminar de reparar algo se escala a
-        # DISM -- el caso real en que hace falta reconstruir la
-        # imagen base antes de que sfc pueda usarla como fuente de
-        # reparación. Este es el único camino que paga el costo de
-        # tiempo/red de DISM, no todos los ciclos.
-        aviso_dism = ""
-        if reparado_parcial:
-            r1 = subprocess.run(
-                ["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"],
-                capture_output=True, text=True, timeout=300,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            dism_fallo = r1.returncode != 0
-            aviso_dism = ("DISM no pudo completar la restauración de la imagen base "
-                          "(revisá tu conexión a Windows Update). ") if dism_fallo else ""
-            if dism_fallo:
-                return (f"{prefijo}{aviso_dism}Encontré archivos dañados pero no pude reparar todos. "
-                        "Puede necesitar el medio de instalación de Windows para terminar.")
-            # DISM restauró la imagen base -- reintentar sfc una vez
-            # más con la fuente ya reparada.
-            r2b = subprocess.run(
-                ["sfc", "/scannow"],
-                capture_output=True, text=True, timeout=300,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            salida = r2b.stdout.lower()
+        if estado == "desconocido":
+            # No se asume que "reparó algo": se deja evidencia en el log
+            # para saber qué dijo realmente sfc, y no se cuenta a favor
+            # ni en contra en el aprendizaje de reparaciones.
+            logging.warning(f"[REPARADOR] Salida de sfc no reconocida (código {rc}): "
+                            f"{_resumen_error(original)!r}")
+            return (f"{prefijo}Resultado de sfc no reconocido (código {rc}); "
+                    "lo dejé anotado en el log sin contarlo como éxito ni como fallo.")
 
-        # VERIFICACIÓN REAL: antes esto confiaba en la palabra de sfc
-        # de que "reparó archivos dañados" y ya. Ahora se corre una
-        # segunda pasada de solo-verificación (mucho más rápida que
-        # un scan completo, no repara nada, solo confirma) para saber
-        # de verdad si el problema quedó resuelto o si sigue ahí.
+        if estado == "parcial":
+            # Solo acá se paga el costo de tiempo/red de DISM.
+            rc_dism, _, original_dism = _correr(
+                ["DISM", "/Online", "/Cleanup-Image", "/RestoreHealth"], 300)
+            if rc_dism not in _DISM_CODIGOS_OK:
+                logging.warning(f"[REPARADOR] DISM /RestoreHealth terminó con código {rc_dism}: "
+                                f"{_resumen_error(original_dism)!r}")
+                return (f"{prefijo}DISM no pudo completar la restauración de la imagen base "
+                        "(revisá tu conexión a Windows Update). Encontré archivos dañados pero "
+                        "no pude reparar todos. Puede necesitar el medio de instalación de "
+                        "Windows para terminar.")
+            # DISM restauró la imagen base -- reintentar sfc una vez más.
+            rc, salida, original = _correr(["sfc", "/scannow"], 300)
+            estado = _clasificar_sfc(salida)
+            if estado == "intacto":
+                return (f"{prefijo}Reparación completada y VERIFICADA. DISM restauró la imagen "
+                        "base y sfc ya no encuentra infracciones.")
+
+        # VERIFICACIÓN REAL: segunda pasada de solo-verificación (no repara
+        # nada, solo confirma que el problema ya no está).
         verificado = False
         try:
-            r3 = subprocess.run(
-                ["sfc", "/verifyonly"],
-                capture_output=True, text=True, timeout=180,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            salida_verif = r3.stdout.lower()
-            verificado = (
-                "no se encontraron infracciones" in salida_verif or
-                "did not find any integrity violations" in salida_verif
-            )
+            _, salida_verif, _ = _correr(["sfc", "/verifyonly"], 180)
+            verificado = _clasificar_sfc(salida_verif) == "intacto"
         except Exception:
             pass  # si la verificación falla, no perdemos el resultado de la reparación en sí
 
         if verificado:
-            return (f"{prefijo}{aviso_dism}Reparación completada y VERIFICADA. Windows encontró y corrigió "
-                     "archivos dañados, y confirmé con una segunda pasada que ya no quedan infracciones.")
-        return (f"{prefijo}{aviso_dism}Windows dijo que corrigió archivos dañados, pero no pude confirmar el "
-                 "resultado con una segunda verificación. Vale la pena revisarlo de nuevo más tarde.")
+            return (f"{prefijo}Reparación completada y VERIFICADA. Windows encontró y corrigió "
+                    "archivos dañados, y confirmé con una segunda pasada que ya no quedan infracciones.")
+        return (f"{prefijo}Windows dijo que corrigió archivos dañados, pero no pude confirmar el "
+                "resultado con una segunda verificación. Vale la pena revisarlo de nuevo más tarde.")
     except subprocess.TimeoutExpired:
         return "La reparación tomó demasiado tiempo y se canceló. Intenta en modo de bajo uso."
     except Exception as e:
@@ -289,29 +357,43 @@ def reparar_archivos_sistema() -> str:
 
 def limpiar_winsxs() -> str:
     """
-    Limpia la carpeta WinSxS — puede liberar 1-3GB.
-    Completamente seguro, Windows lo maneja internamente.
+    Limpia la carpeta WinSxS con DISM.
+
+    Antes se ignoraba el código de salida de DISM: si DISM fallaba al
+    instante, igual se reportaba "limpieza ejecutada, no liberó espacio
+    medible", y memoria.py lo contaba como ÉXITO. Ahora un código de
+    salida distinto de 0/3010 se reporta como fallo, con el detalle en el log.
     """
     try:
         ok_rest, _ = crear_punto_restauracion("Ada - antes de limpiar WinSxS")
         prefijo = "Creé un punto de restauración. " if ok_rest else ""
 
-        # VERIFICACIÓN REAL: en vez de repetir el estimado genérico
-        # "1 a 3 GB posibles" (que Windows nunca confirma), medimos
-        # el espacio libre real antes y después. Así Ada dice lo que
-        # de verdad pasó, no una promesa.
+        try:
+            from medico import notificar_windows
+            notificar_windows("Ada — reparación en curso",
+                              "Voy a limpiar WinSxS con DISM, puede tardar unos minutos. "
+                              "Si podés, esperá antes de apagar el equipo.")
+        except Exception:
+            pass
+
+        # Se mide el espacio libre real antes y después, en vez de repetir
+        # un estimado genérico que Windows nunca confirma.
         libre_antes = psutil.disk_usage(BASE_DIR).free / (1024 ** 3)
 
-        # DISM /ResetBase puede tardar varios minutos en equipos reales
-        # (no es un cuelgue) -- se avisa antes de que el log muestre un
-        # salto largo sin actividad, para no confundirlo con que Ada
-        # dejó de responder.
-        logging.info("[REPARADOR] Limpiando WinSxS con DISM — puede tardar hasta 5 minutos.")
+        # /ResetBase puede tardar bastante más de 5 minutos la primera vez
+        # que corre con permisos de administrador reales (antes fallaba al
+        # instante por falta de permisos, así que nunca se había medido
+        # cuánto tarda de verdad). Se le dan 20 minutos de margen.
+        logging.info("[REPARADOR] Limpiando WinSxS con DISM — puede tardar hasta 20 minutos.")
 
-        r = subprocess.run(
-            ["DISM", "/Online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"],
-            capture_output=True, text=True, timeout=300,
-            creationflags=subprocess.CREATE_NO_WINDOW)
+        rc, _, original = _correr(
+            ["DISM", "/Online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"], 1200)
+
+        if rc not in _DISM_CODIGOS_OK:
+            detalle = _resumen_error(original)
+            logging.warning(f"[REPARADOR] DISM (limpieza WinSxS) terminó con código {rc}: {detalle!r}")
+            return (f"{prefijo}No pude completar la limpieza de WinSxS: DISM terminó con "
+                    f"código {rc}. Detalle en el log.")
 
         libre_despues = psutil.disk_usage(BASE_DIR).free / (1024 ** 3)
         liberado = libre_despues - libre_antes
@@ -557,6 +639,37 @@ creationflags=subprocess.CREATE_NO_WINDOW)
                  "real. Puede necesitar un reinicio completo, o el problema es de otra causa (router, proveedor).")
     except Exception as e:
         return f"Error reparando red: {e}"
+
+
+ALERTA_BATERIA_PATH = os.path.join(BASE_DIR, "privado", "alerta_bateria.json")
+ALERTA_BATERIA_COOLDOWN_SEG = 7 * 24 * 3600  # 7 días -- la salud de la batería no cambia de un día a otro
+
+
+def debe_alertar_bateria_critica() -> bool:
+    """
+    True solo si nunca se avisó, o hace más de 7 días que no se avisa.
+    Persistido en archivo, no en memoria de sesión (_sesion se pierde
+    en cada reinicio y Ada reinicia varias veces por día en la
+    práctica) -- sin esto, el aviso se repetiría en cada arranque para
+    algo que cambia en semanas o meses, no en horas.
+    """
+    try:
+        with open(ALERTA_BATERIA_PATH, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        if (time.time() - datos.get("ultima_alerta", 0)) < ALERTA_BATERIA_COOLDOWN_SEG:
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def registrar_alerta_bateria(salud_pct):
+    try:
+        os.makedirs(os.path.dirname(ALERTA_BATERIA_PATH), exist_ok=True)
+        with open(ALERTA_BATERIA_PATH, "w", encoding="utf-8") as f:
+            json.dump({"salud_pct": salud_pct, "ultima_alerta": time.time()}, f)
+    except Exception as e:
+        logging.error(f"[BATERÍA] No pude guardar la alerta: {e}")
 
 
 def diagnostico_bateria() -> dict:
